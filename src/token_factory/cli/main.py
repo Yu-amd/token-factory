@@ -352,8 +352,13 @@ def catalog_update(
 @app.command()
 def ui() -> None:
     """Launch Streamlit UI locally."""
-    ui_path = repo_root() / "ui" / "app.py"
-    subprocess.run([sys.executable, "-m", "streamlit", "run", str(ui_path)], check=False)
+    ui_dir = repo_root() / "ui"
+    # Run from ui/ so .streamlit/config.toml (dark SR-aligned theme) is applied.
+    subprocess.run(
+        [sys.executable, "-m", "streamlit", "run", "app.py"],
+        cwd=str(ui_dir),
+        check=False,
+    )
 
 
 @app.command()

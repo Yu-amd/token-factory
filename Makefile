@@ -57,7 +57,7 @@ ports:
 	$(PY) -m token_factory.cli.main ports start
 
 ui:
-	$(PY) -m streamlit run ui/app.py
+	cd ui && $(PY) -m streamlit run app.py
 
 logs:
 	kubectl logs -n vllm-semantic-router-system deploy/semantic-router -f --tail=100

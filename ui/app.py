@@ -1,10 +1,12 @@
-"""Token Factory Streamlit UI."""
+"""Token Factory Streamlit UI — dark console aligned with vLLM-SR dashboard."""
 
 from __future__ import annotations
 
 import json
 import os
+import textwrap
 from pathlib import Path
+from typing import Any
 
 import httpx
 import streamlit as st
@@ -14,7 +16,259 @@ META_PATH = ROOT / "generated" / "ui-metadata.json"
 GATEWAY = os.environ.get("TF_GATEWAY_URL", "http://127.0.0.1:18080")
 VIRTUAL_MODEL = os.environ.get("TF_VIRTUAL_MODEL", "token-factory/auto")
 
-st.set_page_config(page_title="AMD Token Factory", page_icon="🏭", layout="wide")
+st.set_page_config(
+    page_title="AMD Token Factory",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+CSS = textwrap.dedent(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+    :root {
+      --tf-bg: #0a0a0a;
+      --tf-surface: #141414;
+      --tf-elevated: #1f1f1f;
+      --tf-border: #333333;
+      --tf-border-hover: #444444;
+      --tf-text: #e8e8e8;
+      --tf-muted: #999999;
+      --tf-faint: #666666;
+      --tf-green: #76b900;
+      --tf-green-hi: #8fd400;
+      --tf-green-dim: rgba(118, 185, 0, 0.12);
+      --tf-danger: #ef4444;
+      --tf-warn: #f59e0b;
+      --tf-cyan: #00d4ff;
+      --tf-max: 1400px;
+    }
+
+    html, body, [class*="css"] {
+      font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    }
+
+    .stApp {
+      background:
+        radial-gradient(1200px 600px at 70% -10%, rgba(118, 185, 0, 0.08), transparent 55%),
+        radial-gradient(900px 500px at 10% 110%, rgba(0, 212, 255, 0.05), transparent 50%),
+        var(--tf-bg) !important;
+      color: var(--tf-text);
+    }
+
+    #MainMenu, footer, header { visibility: hidden; }
+    [data-testid="stToolbar"] { display: none; }
+    .block-container {
+      max-width: var(--tf-max) !important;
+      padding-top: 1.25rem !important;
+      padding-bottom: 3rem !important;
+    }
+
+    .tf-chrome {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.85rem 0 1.1rem;
+      border-bottom: 1px solid var(--tf-border);
+      margin-bottom: 1.35rem;
+    }
+    .tf-brand { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+    .tf-mark {
+      width: 28px; height: 28px; border-radius: 6px;
+      background: linear-gradient(145deg, var(--tf-green-hi), var(--tf-green));
+      box-shadow: 0 0 18px rgba(118, 185, 0, 0.35);
+      display: grid; place-items: center; flex-shrink: 0;
+    }
+    .tf-mark svg { display: block; }
+    .tf-brand-text h1 {
+      margin: 0; font-size: 1.05rem; font-weight: 650;
+      letter-spacing: -0.01em; color: var(--tf-text); line-height: 1.2;
+    }
+    .tf-brand-text p {
+      margin: 0.15rem 0 0; font-size: 0.72rem; color: var(--tf-muted);
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .tf-badge {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.35rem 0.75rem; border-radius: 999px;
+      border: 1px solid var(--tf-border); background: rgba(255,255,255,0.03);
+      color: var(--tf-muted); font-size: 0.75rem; font-weight: 500; white-space: nowrap;
+    }
+    .tf-badge strong { color: var(--tf-green-hi); font-weight: 600; }
+
+    .tf-status-row {
+      display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0.65rem; margin-bottom: 1.25rem;
+    }
+    @media (max-width: 900px) {
+      .tf-status-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .tf-status {
+      background: var(--tf-surface); border: 1px solid var(--tf-border);
+      border-radius: 0.5rem; padding: 0.85rem 0.95rem;
+      transition: border-color 0.15s ease;
+    }
+    .tf-status:hover { border-color: var(--tf-border-hover); }
+    .tf-status-label {
+      font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--tf-faint); margin-bottom: 0.35rem;
+    }
+    .tf-status-value {
+      display: flex; align-items: center; gap: 0.45rem;
+      font-size: 0.95rem; font-weight: 600;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+    }
+    .tf-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .tf-up .tf-dot { background: var(--tf-green); box-shadow: 0 0 10px rgba(118,185,0,0.55); }
+    .tf-up .tf-status-value { color: var(--tf-green-hi); }
+    .tf-down .tf-dot { background: var(--tf-danger); box-shadow: 0 0 10px rgba(239,68,68,0.45); }
+    .tf-down .tf-status-value { color: #fca5a5; }
+    .tf-warn .tf-dot { background: var(--tf-warn); }
+    .tf-warn .tf-status-value { color: #fcd34d; }
+
+    .tf-card {
+      background: var(--tf-surface); border: 1px solid var(--tf-border);
+      border-radius: 0.5rem; padding: 1.25rem 1.35rem; margin-bottom: 0.85rem;
+    }
+    .tf-eyebrow {
+      font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--tf-faint); margin: 0 0 0.35rem;
+    }
+    .tf-h2 {
+      margin: 0 0 0.35rem; font-size: 1.15rem; font-weight: 650;
+      letter-spacing: -0.015em; color: var(--tf-text);
+    }
+    .tf-sub {
+      margin: 0; color: var(--tf-muted); font-size: 0.9rem; line-height: 1.45;
+    }
+    .tf-mono {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.82rem;
+    }
+
+    .tf-route {
+      display: grid; grid-template-columns: 1fr auto; gap: 0.5rem 1rem;
+      align-items: start; padding: 1rem 1.1rem; background: var(--tf-elevated);
+      border: 1px solid var(--tf-border); border-radius: 0.5rem; margin-bottom: 0.65rem;
+    }
+    .tf-route-name { font-weight: 600; color: var(--tf-text); font-size: 0.95rem; }
+    .tf-route-model {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.78rem; color: var(--tf-cyan); margin-top: 0.2rem;
+    }
+    .tf-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.55rem; }
+    .tf-chip {
+      font-size: 0.7rem; padding: 0.2rem 0.55rem; border-radius: 999px;
+      background: var(--tf-green-dim); color: var(--tf-green-hi);
+      border: 1px solid rgba(118,185,0,0.25);
+    }
+    .tf-hw { text-align: right; font-size: 0.75rem; color: var(--tf-muted); line-height: 1.4; }
+    .tf-hw strong { color: var(--tf-text); display: block; font-size: 0.85rem; }
+
+    .tf-flow {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.8rem; line-height: 1.55; color: var(--tf-muted);
+      background: #0d0d0d; border: 1px solid var(--tf-border); border-radius: 0.5rem;
+      padding: 1.1rem 1.25rem; overflow-x: auto; white-space: pre;
+    }
+    .tf-flow .hi { color: var(--tf-green-hi); }
+    .tf-flow .dim { color: var(--tf-faint); }
+
+    .tf-kv {
+      display: grid; grid-template-columns: 140px 1fr; gap: 0.55rem 1rem; font-size: 0.9rem;
+    }
+    .tf-kv dt {
+      color: var(--tf-faint); text-transform: uppercase; letter-spacing: 0.08em;
+      font-size: 0.7rem; padding-top: 0.2rem;
+    }
+    .tf-kv dd {
+      margin: 0; color: var(--tf-text);
+      font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.85rem;
+    }
+
+    .tf-links { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.75rem; }
+    .tf-link {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.55rem 0.95rem; border-radius: 999px;
+      border: 1px solid var(--tf-border); background: rgba(255,255,255,0.03);
+      color: var(--tf-text) !important; text-decoration: none !important;
+      font-size: 0.82rem; font-weight: 500;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .tf-link:hover {
+      border-color: var(--tf-green); background: var(--tf-green-dim);
+      color: var(--tf-green-hi) !important;
+    }
+
+    div[data-testid="stTabs"] button[data-baseweb="tab"] {
+      font-family: "IBM Plex Sans", sans-serif !important;
+      font-weight: 500 !important; color: var(--tf-muted) !important;
+      background: transparent !important; border-radius: 999px !important;
+      padding: 0.4rem 0.9rem !important;
+    }
+    div[data-testid="stTabs"] button[aria-selected="true"] {
+      color: var(--tf-green-hi) !important; background: var(--tf-green-dim) !important;
+    }
+    div[data-testid="stTabs"] [data-baseweb="tab-highlight"],
+    div[data-testid="stTabs"] [data-baseweb="tab-border"] { display: none !important; }
+    div[data-testid="stTabs"] [role="tablist"] {
+      gap: 0.25rem; border-bottom: 1px solid var(--tf-border) !important;
+      padding-bottom: 0.5rem; margin-bottom: 0.75rem;
+    }
+
+    .stTextArea textarea, .stTextInput input,
+    [data-testid="stChatInput"] textarea {
+      background: var(--tf-elevated) !important;
+      border: 1px solid var(--tf-border) !important;
+      color: var(--tf-text) !important; border-radius: 0.5rem !important;
+      font-family: "IBM Plex Sans", sans-serif !important;
+    }
+    .stTextArea textarea:focus, .stTextInput input:focus,
+    [data-testid="stChatInput"] textarea:focus {
+      border-color: var(--tf-green) !important;
+      box-shadow: 0 0 0 1px rgba(118,185,0,0.35) !important;
+    }
+
+    .stButton > button {
+      background: var(--tf-green) !important; color: #0a0a0a !important;
+      border: none !important; border-radius: 999px !important;
+      font-weight: 650 !important; letter-spacing: 0.01em;
+      padding: 0.45rem 1.25rem !important;
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+    .stButton > button:hover {
+      background: var(--tf-green-hi) !important;
+      box-shadow: 0 0 18px rgba(118,185,0,0.35);
+      color: #0a0a0a !important;
+    }
+    .stButton > button[kind="secondary"] {
+      background: transparent !important; color: var(--tf-text) !important;
+      border: 1px solid var(--tf-border) !important;
+    }
+
+    div[data-testid="stChatMessage"] {
+      background: var(--tf-surface) !important; border: 1px solid var(--tf-border);
+      border-radius: 0.5rem; padding: 0.75rem 1rem; margin-bottom: 0.55rem;
+    }
+    div[data-testid="stDataFrame"] {
+      border: 1px solid var(--tf-border); border-radius: 0.5rem; overflow: hidden;
+    }
+    .stExpander {
+      background: var(--tf-surface) !important; border: 1px solid var(--tf-border) !important;
+      border-radius: 0.5rem !important;
+    }
+    .stCaption, [data-testid="stCaptionContainer"] { color: var(--tf-muted) !important; }
+    </style>
+    """
+).strip()
+
+
+def html(fragment: str) -> None:
+    """Render HTML without Streamlit markdown indent/code-block traps."""
+    st.html(textwrap.dedent(fragment).strip())
 
 
 @st.cache_data(ttl=30)
@@ -32,101 +286,251 @@ def probe(url: str, path: str = "/health") -> str:
         return "DOWN"
 
 
+def status_class(value: str) -> str:
+    if value == "UP":
+        return "tf-up"
+    if value.startswith("HTTP"):
+        return "tf-warn"
+    return "tf-down"
+
+
+def render_chrome(virtual_model: str) -> None:
+    html(
+        f"""
+        <div class="tf-chrome">
+          <div class="tf-brand">
+            <div class="tf-mark" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M3 11.5L8 3.5L13 11.5H3Z" fill="#0a0a0a"/>
+                <path d="M5.2 10.2H10.8L8 5.8L5.2 10.2Z" fill="#76b900"/>
+              </svg>
+            </div>
+            <div class="tf-brand-text">
+              <h1>AMD Token Factory</h1>
+              <p>Semantic routing · Instinct · EPYC · Radeon</p>
+            </div>
+          </div>
+          <div class="tf-badge">Virtual model · <strong>{virtual_model}</strong></div>
+        </div>
+        """
+    )
+
+
+def render_status(checks: list[tuple[str, str]]) -> None:
+    tiles = []
+    for name, value in checks:
+        cls = status_class(value)
+        tiles.append(
+            f'<div class="tf-status {cls}">'
+            f'<div class="tf-status-label">{name}</div>'
+            f'<div class="tf-status-value"><span class="tf-dot"></span>{value}</div>'
+            f"</div>"
+        )
+    html(f'<div class="tf-status-row">{"".join(tiles)}</div>')
+
+
+def section(eyebrow: str, title: str, subtitle: str) -> None:
+    html(
+        f"""
+        <div class="tf-card">
+          <p class="tf-eyebrow">{eyebrow}</p>
+          <h2 class="tf-h2">{title}</h2>
+          <p class="tf-sub">{subtitle}</p>
+        </div>
+        """
+    )
+
+
+def chat_completion(prompt: str, model: str) -> dict[str, Any]:
+    r = httpx.post(
+        f"{GATEWAY}/v1/chat/completions",
+        headers={"Authorization": "Bearer demo-key"},
+        json={
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 512,
+        },
+        timeout=120.0,
+    )
+    if r.status_code >= 400:
+        raise RuntimeError(f"HTTP {r.status_code}: {r.text[:500]}")
+    return r.json()
+
+
+def extract_reply(body: dict[str, Any]) -> str:
+    msg = (body.get("choices") or [{}])[0].get("message", {})
+    return (msg.get("content") or msg.get("reasoning") or "").strip() or "(empty content)"
+
+
+# ---------------------------------------------------------------------------
+# App
+# ---------------------------------------------------------------------------
+st.html(CSS)
 meta = load_metadata()
 links = meta.get("links", {})
 VIRTUAL_MODEL = meta.get("virtual_model") or VIRTUAL_MODEL
 
-st.title("AMD Token Factory")
-st.caption("Config-driven semantic routing reference architecture")
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-cols = st.columns(5)
-checks = [
-    ("Gateway", GATEWAY),
-    ("SR API", links.get("semantic_router_api", "http://localhost:8081")),
-    ("SR Dashboard", links.get("semantic_router_dashboard", "http://localhost:8700")),
-    ("Grafana", links.get("grafana", "http://localhost:3000")),
-    ("Prometheus", links.get("prometheus", "http://localhost:9090")),
+render_chrome(VIRTUAL_MODEL)
+
+probe_defs = [
+    ("Gateway", GATEWAY, "/v1/models"),
+    ("SR API", links.get("semantic_router_api", "http://localhost:8081"), "/health"),
+    ("SR Dashboard", links.get("semantic_router_dashboard", "http://localhost:8700"), "/"),
+    ("Grafana", links.get("grafana", "http://localhost:3000"), "/api/health"),
+    ("Prometheus", links.get("prometheus", "http://localhost:9090"), "/-/healthy"),
 ]
-for col, (name, url) in zip(cols, checks):
-    if "9090" in url:
-        path = "/-/healthy"
-    elif "8080" in url or "18080" in url or name == "Gateway":
-        path = "/v1/models"
-    elif "8700" in url or "Dashboard" in name:
-        path = "/"
-    else:
-        path = "/health"
-    col.metric(name, probe(url, path))
+render_status([(n, probe(u, p)) for n, u, p in probe_defs])
 
 tab_chat, tab_route, tab_arch, tab_inv, tab_pol, tab_ops = st.tabs(
-    ["Chat", "Routing", "Architecture", "Endpoints", "Policies", "Operations"]
+    ["Playground", "Routing", "Architecture", "Endpoints", "Policies", "Operations"]
 )
 
 with tab_chat:
-    st.subheader("Chat (virtual model)")
-    prompt = st.text_area("Message", "Explain ROCm AIM optimized profiles on MI350X")
-    if st.button("Send"):
-        try:
-            r = httpx.post(
-                f"{GATEWAY}/v1/chat/completions",
-                headers={"Authorization": "Bearer demo-key"},
-                json={
-                    "model": VIRTUAL_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 256,
-                },
-                timeout=120.0,
-            )
-            if r.status_code >= 400:
-                st.error(f"HTTP {r.status_code}: {r.text[:500]}")
-            else:
-                body = r.json()
-                msg = (body.get("choices") or [{}])[0].get("message", {})
-                content = msg.get("content") or msg.get("reasoning") or ""
-                st.write(content or "(empty content)")
-                with st.expander("Raw response"):
-                    st.json(body)
-                st.caption(
-                    f"model={body.get('model')} · gateway={GATEWAY}"
-                )
-        except Exception as exc:
-            st.error(f"{exc} — is the gateway up? Run: token-factory ports start")
+    section(
+        "Playground",
+        "Chat through the gateway",
+        f'Requests hit Envoy AI Gateway → Semantic Router → AIM backends. '
+        f'Model <span class="tf-mono">{VIRTUAL_MODEL}</span> · '
+        f'gateway <span class="tf-mono">{GATEWAY}</span>',
+    )
+
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if msg.get("meta"):
+                st.caption(msg["meta"])
+
+    prompt = st.chat_input("Ask Token Factory… e.g. Write a ROCm kernel sketch in Python")
+    if prompt:
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        with st.chat_message("assistant"):
+            with st.spinner("Routing…"):
+                try:
+                    body = chat_completion(prompt, VIRTUAL_MODEL)
+                    reply = extract_reply(body)
+                    meta_line = (
+                        f"routed model={body.get('model')} · "
+                        f"finish={(body.get('choices') or [{}])[0].get('finish_reason')}"
+                    )
+                    st.markdown(reply)
+                    st.caption(meta_line)
+                    with st.expander("Raw response"):
+                        st.json(body)
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": reply, "meta": meta_line}
+                    )
+                except Exception as exc:
+                    err = f"{exc} — is the gateway up? Run: `token-factory ports start`"
+                    st.error(err)
+                    st.session_state.messages.append(
+                        {"role": "assistant", "content": err}
+                    )
+
+    if st.session_state.messages:
+        if st.button("Clear chat", type="secondary"):
+            st.session_state.messages = []
+            st.rerun()
 
 with tab_route:
-    st.subheader("Routing decisions")
+    section(
+        "Routing",
+        "Domain → expert → AIM",
+        "Compiled from policies.yaml. LoRA names are real backend model ids (AIGW route match).",
+    )
     for route in meta.get("routes", []):
-        st.markdown(f"**{route.get('lora_name')}** → `{route.get('endpoint', {}).get('model')}`")
-        st.write("Domains:", ", ".join(route.get("domains", [])))
+        ep = route.get("endpoint") or {}
+        chips = "".join(
+            f'<span class="tf-chip">{d}</span>' for d in route.get("domains", [])
+        )
+        html(
+            f"""
+            <div class="tf-route">
+              <div>
+                <div class="tf-route-name">{route.get('name', 'route')}</div>
+                <div class="tf-route-model">{route.get('lora_name')} → {ep.get('model', '—')}</div>
+                <div class="tf-chips">{chips}</div>
+              </div>
+              <div class="tf-hw">
+                <strong>{(ep.get('hardware') or '—').upper()}</strong>
+                {ep.get('accelerator', '')}<br/>
+                {ep.get('host', '')}:{ep.get('port', '')}
+              </div>
+            </div>
+            """
+        )
 
 with tab_arch:
-    st.subheader("Architecture")
-    st.code(
+    section(
+        "Architecture",
+        "Control path",
+        'Single virtual model; Semantic Router sets <span class="tf-mono">x-ai-eg-model</span> for Envoy AI Gateway.',
+    )
+    html(
         """
-Client → Envoy AI Gateway → vLLM Semantic Router (extproc)
-              │                        │
-              │                        ├─ coding-expert → GPT-OSS 120B (Instinct)
-              │                        └─ general-expert → GPT-OSS 20B (Instinct)
-              └─ AIServiceBackend / AIGatewayRoute (AIGW v0.4.0 CRDs)
-        """,
-        language="text",
+        <div class="tf-flow"><span class="hi">Client</span>
+   │  POST /v1/chat/completions  model=token-factory/auto
+   ▼
+<span class="hi">Envoy AI Gateway</span>  <span class="dim">(AIGW v0.4.0)</span>
+   │  extproc → Semantic Router :50051
+   ▼
+<span class="hi">vLLM Semantic Router</span>  <span class="dim">domain classify → LoRA / x-ai-eg-model</span>
+   ├─ coding / math     → openai/gpt-oss-120b  <span class="dim">Instinct MI300X</span>
+   └─ general           → openai/gpt-oss-20b   <span class="dim">Instinct MI300X</span>
+   ▼
+<span class="hi">AIGatewayRoute</span>  <span class="dim">match header → AIServiceBackend → AIM HTTP</span></div>
+        """
     )
 
 with tab_inv:
-    st.subheader("Endpoint inventory")
-    st.dataframe(meta.get("endpoints", []), width="stretch")
+    section(
+        "Inventory",
+        "Configured endpoints",
+        "From endpoints.yaml after compile.",
+    )
+    st.dataframe(meta.get("endpoints", []), width="stretch", hide_index=True)
 
 with tab_pol:
-    st.subheader("Active policy")
-    st.write("Policy:", meta.get("policy_name", "amd-balanced"))
-    st.write("Mode:", meta.get("priority_mode", "balanced"))
-    st.write("Virtual model:", meta.get("virtual_model", VIRTUAL_MODEL))
+    section(
+        "Policies",
+        "Active policy pack",
+        "Authoritative source under config/ and policies/.",
+    )
+    html(
+        f"""
+        <div class="tf-card">
+          <dl class="tf-kv">
+            <dt>Policy</dt><dd>{meta.get('policy_name', 'amd-balanced')}</dd>
+            <dt>Mode</dt><dd>{meta.get('priority_mode', 'balanced')}</dd>
+            <dt>Virtual model</dt><dd>{meta.get('virtual_model', VIRTUAL_MODEL)}</dd>
+            <dt>Routes</dt><dd>{len(meta.get('routes', []))}</dd>
+            <dt>Endpoints</dt><dd>{len(meta.get('endpoints', []))}</dd>
+          </dl>
+        </div>
+        """
+    )
 
 with tab_ops:
-    st.subheader("Operations")
-    st.markdown(
-        f"- [Semantic Router Dashboard]({links.get('semantic_router_dashboard', 'http://localhost:8700')})\n"
-        f"- [Grafana]({links.get('grafana', 'http://localhost:3000')})\n"
-        f"- [Prometheus]({links.get('prometheus', 'http://localhost:9090')})"
+    dash = links.get("semantic_router_dashboard", "http://localhost:8700")
+    graf = links.get("grafana", "http://localhost:3000")
+    prom = links.get("prometheus", "http://localhost:9090")
+    html(
+        f"""
+        <div class="tf-card">
+          <p class="tf-eyebrow">Operations</p>
+          <h2 class="tf-h2">Sibling consoles</h2>
+          <p class="tf-sub">Token Factory UI is the operator front door; deep tooling lives on these surfaces.</p>
+          <div class="tf-links">
+            <a class="tf-link" href="{dash}" target="_blank" rel="noopener">Semantic Router Dashboard →</a>
+            <a class="tf-link" href="{graf}" target="_blank" rel="noopener">Grafana →</a>
+            <a class="tf-link" href="{prom}" target="_blank" rel="noopener">Prometheus →</a>
+          </div>
+        </div>
+        """
     )
     if st.button("Refresh metadata"):
         st.cache_data.clear()
