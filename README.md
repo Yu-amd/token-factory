@@ -13,7 +13,7 @@ Repository: https://github.com/Yu-amd/token-factory
 - **Policy profiles**: balanced, quality, cost-efficient, low-latency, edge-first, enterprise
 - **AIM catalog** from AMD Enterprise AI accelerator matrix
 - **Streamlit UI** — Playground with **live TTFT**, **Automated Demo**, **AMD Routing Matrix**, **Policies** (canonical policy explorer), routing, architecture, inventory, operations
-- **AMD Opinionated Routing** — one canonical policy (`policies/amd-policy.yaml`) shared by Matrix, Explain Policy, simulation, and compile (`token-factory recommend` / `token-factory policy`)
+- **AMD Opinionated Routing** — one canonical policy (`policies/amd-policy.yaml`) shared by Matrix, Explain Policy, simulation, and compile (`token-factory recommend` / `token-factory policy` / `token-factory evidence`) — see [docs/policy-evidence.md](docs/policy-evidence.md)
 - **Automated Demo** — declarative scenario packs that validate classification, policy, fallback, and observability (`token-factory demo`) — **not** a benchmark portal
 - **Mock OpenAI backends** for kind/CI without GPU
 - **Clean port-forward manager** with PID tracking (no blind `pkill kubectl`)
@@ -40,7 +40,7 @@ V2 adds an opinionated matrix on top of the authoritative AIM catalog — withou
 
 ```text
 AIM CATALOG            = CAN RUN      (catalog/aims.yaml)
-AMD CANONICAL POLICY   = SHOULD RUN   (policies/amd-policy.yaml v2.3)
+AMD CANONICAL POLICY   = SHOULD RUN   (policies/amd-policy.yaml v2.4)
 RUNTIME INVENTORY      = AVAILABLE NOW (config/endpoints.yaml)
 COMPILED ROUTES        = ACTIVE EXECUTION (profile overlays → SR / AIGW)
 ```
@@ -157,7 +157,7 @@ config/                 Example + active YAML config
 policies/               amd-* routing profiles
 catalog/aims.yaml       AMD AIM support matrix (CAN RUN)
 catalog/*               AIM / use-cases / compute / models / cost (CAN RUN + metadata)
-policies/amd-policy.yaml Canonical AMD routing policy (SHOULD RUN, v2.3)
+policies/amd-policy.yaml Canonical AMD routing policy (SHOULD RUN, v2.4)
 policies/profiles/      Profile overlays (objective + V1 SR routes)
 src/token_factory/      Python package (CLI, compiler, catalog, routing_matrix)
 deploy/                 Helm values + K8s manifests

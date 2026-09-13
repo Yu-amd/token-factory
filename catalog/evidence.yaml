@@ -1,0 +1,213 @@
+# Evidence catalog for Token Factory policy-quality governance.
+# Token Factory is NOT a benchmark portal. Records influence policy confidence;
+# missing evidence lowers confidence and must not be read as proof of inferiority.
+# Do not invent $/token or AMD measured performance numbers.
+version: "1"
+metadata:
+  description: >
+    Structured provenance for model capability, public evaluations, and
+    (future) AMD measurements. No metric values without provenance.
+  published: "2026-09-13"
+  policy_version: "2.4"
+  evidence_categories:
+    - VERIFIED
+    - PUBLIC_EVAL
+    - MODEL_CARD
+    - AMD_MEASURED
+    - AMD_ESTIMATED
+    - INFERRED
+    - UNKNOWN
+  maturity_levels:
+    E0: Unknown
+    E1: Inferred
+    E2: Official model documentation
+    E3: Public validated evaluation
+    E4: AMD measured
+  performance_evidence_status:
+    - AMD_MEASURED
+    - PUBLIC_ONLY
+    - ESTIMATED
+    - NO_DATA
+
+# Future ingest for first-party AMD measurements. Null / empty until measured.
+amd_measurements: null
+
+records:
+  - id: glm-47-model-card-coding
+    model: zai-org/GLM-4.7
+    workload: coding-assistant
+    metric: capability.coding
+    value: true
+    source: https://huggingface.co/zai-org/GLM-4.7
+    source_type: MODEL_CARD
+    date: "2025-12-22"
+    methodology: official-model-card
+    confidence: MODEL_CARD
+    notes: >
+      GLM-4.7 documented as coding partner with multilingual agentic coding and
+      terminal-based tasks. No numeric Token Factory AMD measurement attached.
+
+  - id: glm-47-model-card-reasoning
+    model: zai-org/GLM-4.7
+    workload: general-reasoning
+    metric: capability.reasoning
+    value: true
+    source: https://huggingface.co/docs/transformers/en/model_doc/glm4_moe
+    source_type: MODEL_CARD
+    date: "2025-12-22"
+    methodology: official-model-card
+    confidence: MODEL_CARD
+    notes: Interleaved / preserved / turn-level thinking documented.
+
+  - id: glm-47-public-swebench
+    model: zai-org/GLM-4.7
+    workload: software-engineering-agent
+    metric: public_eval.swe_bench
+    value: null  # do not hard-code contested numbers as Token Factory truth
+    source: https://huggingface.co/docs/transformers/en/model_doc/glm4_moe
+    source_type: PUBLIC_EVAL
+    date: "2025-12-22"
+    methodology: provider-reported-public-eval
+    confidence: PUBLIC_EVAL
+    notes: >
+      Provider reports SWE-bench / Terminal Bench gains vs GLM-4.6. Values omitted
+      here intentionally — provenance pointer only until AMD-verified ingest.
+
+  - id: glm-47-agentic-coding
+    model: zai-org/GLM-4.7
+    workload: agentic_coding
+    metric: strength.agentic_coding
+    value: very-high
+    source: https://docs.api.nvidia.com/nim/reference/z-ai-glm4-7
+    source_type: MODEL_CARD
+    date: "2026-01-01"
+    methodology: official-model-card
+    confidence: MODEL_CARD
+    notes: Agentic coding, tool use, terminal tasks highlighted by provider.
+
+  - id: glm-47-flash-model-card
+    model: zai-org/GLM-4.7-Flash
+    workload: coding-assistant
+    metric: capability.coding
+    value: true
+    source: https://huggingface.co/zai-org/GLM-4.7-Flash
+    source_type: MODEL_CARD
+    date: "2025-12-22"
+    methodology: official-model-card
+    confidence: MODEL_CARD
+    notes: Compact GLM-4.7 variant; coding/reasoning inherited with lower footprint.
+
+  - id: qwen3-coder-next-model-card
+    model: Qwen/Qwen3-Coder-Next
+    workload: coding-assistant
+    metric: capability.coding
+    value: true
+    source: https://huggingface.co/Qwen/Qwen3-Coder-Next
+    source_type: MODEL_CARD
+    date: "2026-03-01"
+    methodology: official-model-card
+    confidence: MODEL_CARD
+    notes: >
+      Open-weight coding-agent model (80B-A3B), tool calling, IDE/CLI agent scaffolds.
+      Non-thinking mode only (no CoT reasoning blocks).
+
+  - id: qwen3-coder-next-long-context
+    model: Qwen/Qwen3-Coder-Next
+    workload: repository-reasoning
+    metric: capability.long_context
+    value: true
+    source: https://huggingface.co/Qwen/Qwen3-Coder-Next
+    source_type: MODEL_CARD
+    date: "2026-03-01"
+    methodology: official-model-card
+    confidence: MODEL_CARD
+    notes: Native 256K context for repository-scale workflows.
+
+  - id: qwen3-coder-next-agentic
+    model: Qwen/Qwen3-Coder-Next
+    workload: software-engineering-agent
+    metric: strength.agentic_coding
+    value: very-high
+    source: https://www.arxiv.org/pdf/2603.00729
+    source_type: PUBLIC_EVAL
+    date: "2026-03-01"
+    methodology: technical-report
+    confidence: PUBLIC_EVAL
+    notes: >
+      Tech report describes agentic training on executable tasks; SWE-Bench /
+      Terminal-Bench discussed. Numeric scores not copied into policy catalog.
+
+  - id: qwen3-coder-next-architecture
+    model: Qwen/Qwen3-Coder-Next
+    workload: general
+    metric: architecture.moe
+    value: moe-80b-a3b
+    source: https://huggingface.co/Qwen/Qwen3-Coder-Next
+    source_type: MODEL_CARD
+    date: "2026-03-01"
+    methodology: official-model-card
+    confidence: MODEL_CARD
+    notes: Hybrid attention MoE; 80B total / 3B active.
+
+  - id: deepseek-r1-reasoning
+    model: deepseek-ai/DeepSeek-R1
+    workload: general-reasoning
+    metric: capability.reasoning
+    value: true
+    source: https://huggingface.co/deepseek-ai/DeepSeek-R1
+    source_type: MODEL_CARD
+    date: "2025-01-20"
+    methodology: official-model-card
+    confidence: MODEL_CARD
+    notes: Reasoning-first model; coding treated as capable (not false).
+
+  - id: deepseek-v31-general
+    model: deepseek-ai/DeepSeek-V3.1
+    workload: coding-assistant
+    metric: capability.coding
+    value: true
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V3.1
+    source_type: MODEL_CARD
+    date: "2025-08-01"
+    methodology: official-model-card
+    confidence: MODEL_CARD
+    notes: Corrected prior coding=false false negative.
+
+  - id: mistral-large3-coding
+    model: mistralai/Mistral-Large-3-675B-Instruct-2512
+    workload: coding-assistant
+    metric: capability.coding
+    value: true
+    source: https://huggingface.co/mistralai/Mistral-Large-3-675B-Instruct-2512
+    source_type: MODEL_CARD
+    date: "2025-12-01"
+    methodology: official-model-card
+    confidence: MODEL_CARD
+    notes: Corrected prior coding=false false negative.
+
+# Cost evidence also carries provenance (RELATIVE / UNKNOWN OK — no fabricated $/token).
+cost_evidence:
+  - id: cost-relative-instinct-default
+    scope: compute-family
+    family: instinct
+    metric: relative_cost_class
+    value: null
+    source: catalog/cost-model.yaml
+    source_type: INFERRED
+    date: "2026-09-13"
+    methodology: relative-hardware-cost-class
+    confidence: RELATIVE
+    notes: >
+      Token Factory uses relative hardware / infrastructure cost classes only.
+      No absolute $/token figures are published without measured ingest.
+
+  - id: cost-unknown-placeholder
+    scope: global
+    metric: usd_per_token
+    value: null
+    source: null
+    source_type: UNKNOWN
+    date: "2026-09-13"
+    methodology: none
+    confidence: UNKNOWN
+    notes: Absolute economics intentionally UNKNOWN until measured.

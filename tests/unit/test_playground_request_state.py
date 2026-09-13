@@ -112,8 +112,8 @@ def test_guess_use_case_and_enrich_metadata():
     assert guess_use_case(None, "general") == "simple-chat"
     meta = {
         "policy_name": "amd-balanced",
-        "routing_matrix": {"objective_alias": "balanced", "policy_version": "2.3"},
-        "amd_policy": {"active_profile": "amd-balanced", "version": "2.3"},
+        "routing_matrix": {"objective_alias": "balanced", "policy_version": "2.4"},
+        "amd_policy": {"active_profile": "amd-balanced", "version": "2.4"},
     }
     out = enrich_policy_from_metadata(meta, "coding_route", {"role": "coding"})
     assert out["objective_alias"] == "balanced"

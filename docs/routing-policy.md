@@ -3,7 +3,7 @@
 ## Canonical AMD policy (SHOULD RUN)
 
 The single source of truth for opinionated ranking is **`policies/amd-policy.yaml`**
-(policy version **2.3**). See [policy-model.md](policy-model.md).
+(policy version **2.4**). See [policy-model.md](policy-model.md) and [policy-evidence.md](policy-evidence.md).
 
 V1 Semantic Router packs live under `policies/profiles/` (compat: `policies/amd-*.yaml`)
 and act as **overlays**: objective priorities + domain→endpoint routes — not duplicated

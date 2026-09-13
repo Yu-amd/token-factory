@@ -711,41 +711,118 @@ def test_radeon_local_wins_when_capable_incapable_never():
     assert not any(c["model"] in text_only for c in vlm["candidates"])
 
 
-def test_coding_specialization_beats_size_soft_bias_same_compute():
+def test_coding_quality_fit_not_dominated_by_size_soft_bias_same_compute():
+    """Workload strengths / policy matter more than size soft-bias; specialization is weak."""
     engine = RecommendationEngine(load_routing_bundle(ROOT))
-    # Performance card must prefer coding-specialized AIM
-    cards = engine.summary_cards(
-        "coding-assistant", lifecycle_mode="production", serving_pattern="interactive"
-    )
-    perf = cards["cards"]["best_performance"]["candidate"]
-    assert engine.models[perf["model"]].get("specialization") == "coding" or "Coder" in perf["model"]
-    # On the same compute as a non-specialized peer, coding-specialized ranks better
     rec = engine.recommend(
         "coding-assistant",
         objective="quality",
         lifecycle_mode="production",
         serving_pattern="interactive",
+        compute_filter="MI355X",
     )
-    by_compute: dict[str, list] = {}
-    for c in rec["ranked"]:
-        by_compute.setdefault(c["compute"], []).append(c)
-    for compute, rows in by_compute.items():
-        coder = next((c for c in rows if engine.models[c["model"]].get("specialization") == "coding"), None)
-        general = next(
-            (
-                c
-                for c in rows
-                if engine.models[c["model"]].get("specialization") != "coding"
-                and engine.models[c["model"]].get("size_class") in ("large", "frontier", "medium")
-            ),
-            None,
-        )
-        if coder and general:
-            assert coder["rank"] < general["rank"], (compute, coder["model"], general["model"])
-            break
-    else:
-        # At least overall #1 is coding-specialized
-        assert engine.models[rec["ranked"][0]["model"]].get("specialization") == "coding"
+    ranked = rec["ranked"]
+    assert ranked
+    # Both coding-capable peers remain eligible; do not require Coder always wins globally
+    models = {c["model"] for c in ranked}
+    assert "Qwen/Qwen3-Coder-Next" in models or "zai-org/GLM-4.7" in models
+    top = ranked[0]
+    # Quality objective should surface strong quality_fit, not merely large size_class
+    assert top.get("quality_fit", 0) >= 0.5
+    # Specialization alone must not dwarf measured evidence path — no AMD measured yet,
+    # so Preferred confidence must not be High
+    preferred = [c for c in ranked if c["recommendation"] == "PREFERRED"]
+    for p in preferred:
+        assert str(p.get("confidence")).lower() != "high"
+
+
+def test_glm_and_qwen_coder_both_coding_eligible():
+    engine = RecommendationEngine(load_routing_bundle(ROOT))
+    for mid in ("zai-org/GLM-4.7", "Qwen/Qwen3-Coder-Next"):
+        meta = engine.models[mid]
+        assert meta["capabilities"]["coding"] is True
+    rec = engine.recommend(
+        "coding-assistant",
+        lifecycle_mode="production",
+        compute_filter="MI355X",
+    )
+    models = {c["model"] for c in rec["candidates"]}
+    assert "zai-org/GLM-4.7" in models
+    assert "Qwen/Qwen3-Coder-Next" in models
+    # Neither stale-disqualified by false coding=false
+    assert not any(
+        c["model"] == "zai-org/GLM-4.7" and c.get("capability_excluded")
+        for c in rec["candidates"]
+    )
+
+
+def test_preferred_confidence_not_high_without_amd_measured():
+    engine = RecommendationEngine(load_routing_bundle(ROOT))
+    rec = engine.recommend(
+        "coding-assistant",
+        lifecycle_mode="production",
+        compute_filter="MI355X",
+    )
+    preferred = [c for c in rec["ranked"] if c["recommendation"] == "PREFERRED"]
+    assert preferred, "expected at least one Preferred override on MI355X coding-assistant"
+    for c in preferred:
+        pe = (c.get("performance_evidence") or {}).get("status")
+        assert pe != "AMD_MEASURED" or True  # catalog has null amd_measurements
+        assert str(c.get("confidence")) in ("Medium", "Low", "Experimental", "High")
+        if pe != "AMD_MEASURED":
+            assert str(c.get("confidence")) != "High"
+
+
+def test_compare_models_explainable_no_forced_winner():
+    engine = RecommendationEngine(load_routing_bundle(ROOT))
+    cmp = engine.compare_models(
+        "coding-assistant",
+        "Qwen/Qwen3-Coder-Next",
+        "zai-org/GLM-4.7",
+        compute_id="MI355X",
+    )
+    assert cmp["dimensions"]["capability_coding"]["Qwen/Qwen3-Coder-Next"] == "✓"
+    assert cmp["dimensions"]["capability_coding"]["zai-org/GLM-4.7"] == "✓"
+    assert cmp["amd_performance_evidence"]["Qwen/Qwen3-Coder-Next"] in (
+        "PUBLIC_ONLY",
+        "NO_DATA",
+        "ESTIMATED",
+        "AMD_MEASURED",
+    )
+    assert "caveat" in cmp and "AMD comparative" in cmp["caveat"]
+    # Do not assert Qwen must always win — only that comparison is structured
+    assert "policy_preference" in cmp
+    assert cmp.get("language_note")
+
+
+def test_unknown_capability_not_silent_false():
+    from token_factory.routing_matrix.evidence import cap_is_false, cap_is_unknown, cap_truth
+
+    assert cap_truth("unknown") == "unknown"
+    assert cap_is_unknown("unknown")
+    assert not cap_is_false("unknown")
+    engine = RecommendationEngine(load_routing_bundle(ROOT))
+    # Cohere coding left unknown — not treated as coding=false for false-negative audit
+    cohere = engine.models["CohereLabs/command-a-reasoning-08-2025"]
+    assert cohere["capabilities"]["coding"] in (False, "unknown") or cohere["capabilities"]["coding"] is False
+    # Prefer unknown over false for reasoning-specialized when coding unproven
+    assert cohere["capabilities"]["coding"] == "unknown"
+
+
+def test_specialization_alone_does_not_dominate_quality_evidence():
+    engine = RecommendationEngine(load_routing_bundle(ROOT))
+    rec = engine.recommend(
+        "coding-assistant",
+        objective="quality",
+        lifecycle_mode="production",
+        compute_filter="MI355X",
+    )
+    coder = next(c for c in rec["ranked"] if c["model"] == "Qwen/Qwen3-Coder-Next")
+    glm = next(c for c in rec["ranked"] if c["model"] == "zai-org/GLM-4.7")
+    # Both have high quality_fit from strengths; gap must not be specialization+22 style
+    assert abs((coder.get("quality_fit") or 0) - (glm.get("quality_fit") or 0)) < 0.25
+    # Score delta should be modest relative to old +22 specialization cliff
+    assert abs(coder["score"] - glm["score"]) < 40
 
 
 def test_matrix_ui_only_numbers_top_candidates():

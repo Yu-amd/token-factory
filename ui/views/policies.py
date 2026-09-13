@@ -43,7 +43,7 @@ def render_policies_tab(
             )
             return
 
-    version = pol.get("version") or "2.3"
+    version = pol.get("version") or "2.4"
     counts = pol.get("counts") or {}
     positioning = pol.get("compute_positioning") or {}
     eligibility = pol.get("eligibility") or {}
@@ -99,7 +99,53 @@ def render_policies_tab(
         """
     )
 
-    # --- 2. Decision Pipeline ---
+    # --- Evidence governance ---
+    eg = {}
+    try:
+        from token_factory.policy import load_canonical_policy
+
+        canon = load_canonical_policy()
+        nested = canon.get("policy") or {}
+        eg = nested.get("evidence_governance") or {}
+        last_review = nested.get("published") or pol.get("published")
+        override_schema = nested.get("policy_override_schema") or {}
+    except Exception:
+        last_review = pol.get("published")
+        override_schema = {}
+    html(
+        f"""
+        <div class="tf-card">
+          <p class="tf-eyebrow">Evidence standards</p>
+          <h2 class="tf-h2">Policy-quality / evidence governance</h2>
+          <p class="tf-sub">{_esc(eg.get("statement") or (
+              "Token Factory recommendations are policy decisions derived from model capability, "
+              "AMD AIM support, deployment requirements, lifecycle, economics, and available "
+              "performance evidence. Missing evidence lowers recommendation confidence and should "
+              "not be interpreted as proof of inferiority."
+          ))}</p>
+          <dl class="tf-kv">
+            <dt>Confidence levels</dt>
+            <dd>{_esc(", ".join(eg.get("recommendation_confidence") or ["High", "Medium", "Low", "Experimental"]))}</dd>
+            <dt>High requires</dt>
+            <dd>{_esc(", ".join(eg.get("high_requires") or ["AMD_MEASURED_or_multi_verified", "optimized_aim", "ga_lifecycle"]))}</dd>
+            <dt>Specialization bonus</dt>
+            <dd>{_esc(eg.get("specialization_bonus") or "weak-tie-breaker")}</dd>
+            <dt>Instinct gen bias</dt>
+            <dd>{_esc(eg.get("instinct_gen_bias") or "tie-breaker-unless-amd-measured")}</dd>
+            <dt>Override governance</dt>
+            <dd>{_esc(", ".join((override_schema.get("fields") or ["decision", "rationale", "owner", "reviewed", "expires"])))}</dd>
+            <dt>Last review</dt>
+            <dd>{_esc(last_review)}</dd>
+            <dt>Evidence catalog</dt>
+            <dd>{_esc(eg.get("evidence_catalog") or "catalog/evidence.yaml")}</dd>
+          </dl>
+          <p class="tf-sub" style="margin-top:0.75rem">Badges: AMD = measured · PUB = public eval · CARD = model card · INF = inferred · ? = unknown/pending. Avoid Best/Winner/Superior language.</p>
+        </div>
+        """
+    )
+
+    # --- 1b continued / decision pipeline ---
+    # (original section 2 follows)
     pipe_html = " → ".join(f"<span class='tf-chip'>{_esc(s)}</span>" for s in pipeline)
     html(
         f"""

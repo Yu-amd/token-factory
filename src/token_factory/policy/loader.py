@@ -78,7 +78,7 @@ def load_canonical_policy(root: Path | None = None) -> dict[str, Any]:
                 out[key] = nested[key]
 
     if "version" not in out:
-        out["version"] = nested.get("policy_version") or amd_meta.get("version") or "2.3"
+        out["version"] = nested.get("policy_version") or amd_meta.get("version") or "2.4"
 
     out["_source_path"] = str(path.relative_to(root)) if path.is_relative_to(root) else str(path)
     out["_canonical"] = nested or None

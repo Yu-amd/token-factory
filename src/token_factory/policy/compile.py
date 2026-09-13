@@ -82,7 +82,7 @@ def policy_ui_metadata(
     return {
         "id": nested.get("id") or "amd-routing-policy",
         "display_name": nested.get("display_name") or "AMD Opinionated Routing Policy",
-        "version": policy_meta.get("version") or nested.get("policy_version") or "2.3",
+        "version": policy_meta.get("version") or nested.get("policy_version") or "2.4",
         "published": policy_meta.get("published") or nested.get("published"),
         "description": nested.get("description"),
         "source_path": canonical.get("_source_path") or nested.get("source_path"),

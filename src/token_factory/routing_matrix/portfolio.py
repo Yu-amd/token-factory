@@ -68,6 +68,14 @@ def metadata_incomplete(engine: Any, model: str) -> bool:
     caps = meta.get("capabilities")
     if not isinstance(caps, dict) or not caps:
         return True
+    # Unknown on core text_generation is incomplete
+    tg = caps.get("text_generation")
+    if tg is None:
+        return True
+    from token_factory.routing_matrix.evidence import cap_is_unknown
+
+    if cap_is_unknown(tg):
+        return True
     return False
 
 

@@ -12,7 +12,7 @@ COMPILED ROUTES        = ACTIVE EXECUTION
 | Layer | Question | Source |
 |-------|----------|--------|
 | AIM catalog | Can this model run on this accelerator? | `catalog/aims.yaml` (+ tech-preview merge) |
-| Canonical policy | Should AMD recommend it for this workload? | **`policies/amd-policy.yaml`** (v2.3) |
+| Canonical policy | Should AMD recommend it for this workload? | **`policies/amd-policy.yaml`** (v2.4) |
 | Inventory | Is an endpoint live now? | `config/endpoints.yaml` |
 | Compiled routes | What will Semantic Router actually select? | Profile overlay routes → generated SR/AIGW |
 
@@ -24,7 +24,9 @@ The **Policies** tab is the human-readable representation of the same policy.
 ## Canonical file
 
 **Path:** `policies/amd-policy.yaml`  
-**Policy version:** `2.3` (versioned independently of app code)
+**Policy version:** `2.4` (versioned independently of app code)
+
+Evidence governance (tri-state capabilities, workload strengths, confidence, overrides) is documented in [policy-evidence.md](policy-evidence.md).
 
 Defines:
 

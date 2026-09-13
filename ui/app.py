@@ -1241,6 +1241,9 @@ with tab_matrix:
                         "row_status": row_status.get(model_id),
                         "why_not_recommended": wn,
                         "recommendation": detail.get("recommendation"),
+                        "confidence": detail.get("confidence"),
+                        "evidence_badge": detail.get("evidence_badge"),
+                        "performance_evidence": detail.get("performance_evidence"),
                         "rank": detail.get("rank"),
                         "score": detail.get("score"),
                         "matrix_mark": detail.get("matrix_mark"),
@@ -1252,14 +1255,15 @@ with tab_matrix:
                         "capability_excluded": detail.get("capability_excluded"),
                         "lifecycle_excluded": detail.get("lifecycle_excluded"),
                         "capability_fit": detail.get("capability_fit"),
+                        "quality_fit": detail.get("quality_fit"),
                         "performance_fit": detail.get("performance_fit"),
                         "economic_fit": detail.get("economic_fit"),
                         "deployment_fit": detail.get("deployment_fit"),
                         "lifecycle_fit": detail.get("lifecycle_fit"),
                         "serving_pattern_fit": detail.get("serving_pattern_fit"),
                         "locality_fit": detail.get("locality_fit"),
+                        "evidence_confidence": detail.get("evidence_confidence"),
                         "preference_label": detail.get("preference_label"),
-                        "confidence": detail.get("confidence"),
                         "cost_confidence": detail.get("cost_confidence"),
                         "cost_evidence": detail.get("cost_evidence"),
                         "infrastructure_cost_class": detail.get("infrastructure_cost_class")
@@ -1268,15 +1272,72 @@ with tab_matrix:
                         "relative_cost_class": detail.get("relative_cost_class"),
                         "endpoint_available": detail.get("endpoint_available"),
                         "endpoint_id": detail.get("endpoint_id"),
+                        "rationale": detail.get("rationale"),
                         "why": detail.get("reasons"),
+                        "policy_override": detail.get("policy_override"),
                         "private_eval_note": (
                             "Available via private eval container (Tech Preview / Preview)"
                             if detail.get("lifecycle") in ("preview", "tech-preview")
                             or detail.get("availability") == "private-eval"
                             else None
                         ),
+                        "amd_caveat": (
+                            "AMD comparative performance evidence pending — "
+                            "missing evidence lowers confidence; not proof of inferiority."
+                            if (detail.get("performance_evidence") or {}).get("status")
+                            not in ("AMD_MEASURED",)
+                            else None
+                        ),
                     }
                 )
+                # Human-readable rationale blocks (avoid Best/Winner/Superior language)
+                rat = detail.get("rationale") or {}
+                if rat:
+                    st.markdown("**Why recommended (policy rationale)**")
+                    for block in ("eligibility", "strengths", "weaknesses", "evidence", "uncertainties"):
+                        items = rat.get(block) or []
+                        if items:
+                            st.caption(block.replace("_", " ").title() + ": " + " · ".join(items[:4]))
+                pe = detail.get("performance_evidence") or {}
+                if pe.get("status") and pe.get("status") != "AMD_MEASURED":
+                    st.caption(
+                        f"Evidence badge {detail.get('evidence_badge') or '?'} · "
+                        f"performance_evidence={pe.get('status')} · "
+                        "AMD comparative pending."
+                    )
+                # Alternatives / why not peer (top other ranked on same compute)
+                alts = [
+                    c
+                    for c in ranked
+                    if c.get("compute") == detail.get("compute")
+                    and c.get("model") != detail.get("model")
+                ][:3]
+                if alts:
+                    st.markdown("**Alternatives (same compute)**")
+                    for alt in alts:
+                        st.caption(
+                            f"· {alt.get('model')} — {alt.get('recommendation')} · "
+                            f"confidence {alt.get('confidence')} · "
+                            f"badge {alt.get('evidence_badge')}"
+                        )
+                # Compact model-evidence detail
+                try:
+                    mmeta = engine.models.get(model_id) or {}
+                    if mmeta:
+                        with st.expander("Model evidence (compact)"):
+                            st.write(
+                                {
+                                    "capabilities": mmeta.get("capabilities"),
+                                    "strengths": mmeta.get("strengths"),
+                                    "evidence": mmeta.get("evidence"),
+                                    "provenance_sources": (mmeta.get("provenance") or {}).get(
+                                        "sources"
+                                    ),
+                                    "reviewed": (mmeta.get("provenance") or {}).get("reviewed"),
+                                }
+                            )
+                except Exception:
+                    pass
                 if wn and row_status.get(model_id) != "recommended":
                     st.caption("Why not recommended: " + " · ".join(wn[:3]))
 

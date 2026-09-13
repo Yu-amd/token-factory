@@ -184,12 +184,21 @@ def load_routing_bundle(root: Path | None = None) -> dict[str, Any]:
         policy_path = base / "amd-routing-policy.yaml"
         policy = _load_yaml(policy_path) if policy_path.exists() else {}
 
+    evidence_path = base / "evidence.yaml"
+    evidence = _load_yaml(evidence_path) if evidence_path.exists() else {
+        "version": "1",
+        "records": [],
+        "amd_measurements": None,
+        "cost_evidence": [],
+    }
+
     return {
         "aims": aims_merged,
         "aims_ga": aims_ga,  # pristine GA catalog for V1-style checks
         "compute": _load_yaml(base / "compute.yaml"),
         "use_cases": _load_yaml(base / "use-cases.yaml"),
         "models": _load_yaml(base / "models.yaml"),
+        "evidence": evidence,
         "cost_model": _load_yaml(base / "cost-model.yaml"),
         "policy": policy,
         "aliases": aliases,

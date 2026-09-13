@@ -135,7 +135,7 @@ def test_canonical_vs_runtime_preferred_not_deployed():
             "preferred_not_deployed": True,
             "canonical_vs_runtime_reason": "preferred candidate not deployed",
             "selected_endpoint": "gpt-oss-120b-coding",
-            "policy_version": "2.3",
+            "policy_version": "2.4",
         },
     )
     assert result["route"] == ValidationStatus.PASS.value
@@ -224,7 +224,7 @@ def test_observability_metadata_to_instrumentor():
         scenario_id="interactive-coding",
         request_id="req-1",
         use_case="coding-assistant",
-        policy="2.3",
+        policy="2.4",
         serving_pattern="interactive",
         lifecycle="production",
         model="openai/gpt-oss-120b",
@@ -265,7 +265,7 @@ def test_metrics_server_exposes_prometheus_text(tmp_path, monkeypatch):
             scenario_id="interactive-coding",
             request_id="req-metrics",
             use_case="coding-assistant",
-            policy="2.3",
+            policy="2.4",
             serving_pattern="interactive",
             lifecycle="production",
             model="openai/gpt-oss-120b",

@@ -43,7 +43,7 @@ Implementation: `ui/views/playground.py`, `ui/components/route_flow.py`, `ui/com
 
 ## Policies tab
 
-Human-readable view of **`policies/amd-policy.yaml`** (v2.3). Sections include Policy Overview,
+Human-readable view of **`policies/amd-policy.yaml`** (v2.4). Sections include Policy Overview,
 Decision Pipeline, Eligibility / Guardrails, AMD Compute Positioning (Instinct / MI350P / Radeon / EPYC),
 Objective Profiles, Serving Patterns, Use-Case Coverage, Explain Policy (engine steps 1–7), Fallback,
 Canonical vs Runtime, Compiled Routes, and Provenance. Does **not** paste the full Routing Matrix.

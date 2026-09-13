@@ -4,7 +4,7 @@ version: "1"
 metadata:
   description: Workload taxonomy for Token Factory recommendation engine.
   published: "2026-09-13"
-  policy_version: "2.3"
+  policy_version: "2.4"
 
 objectives:
   - id: balanced
@@ -372,12 +372,15 @@ use_cases:
     semantic_domains: [business, other]
 
   # --- Coding ---
+  # Coding variants stay distinct — do not collapse into one monolithic coding workload.
+  # Hard required vs preferred: do not over-gate on reasoning=false (unknown ≠ false).
   - id: code-completion
     display_name: Code Completion
     category: coding
     capabilities:
       required: [text-generation, coding]
       preferred: []
+    workload_strengths_preferred: [code_completion, code_generation]
     workload:
       latency_sensitivity: very-high
       expected_context: low
@@ -393,7 +396,8 @@ use_cases:
     category: coding
     capabilities:
       required: [text-generation, coding]
-      preferred: [reasoning, tool-use]
+      preferred: [tool-use, reasoning, agentic_coding]
+    workload_strengths_preferred: [code_generation, agentic_coding, code_completion]
     workload:
       latency_sensitivity: high
       expected_context: medium
@@ -412,6 +416,7 @@ use_cases:
     capabilities:
       required: [text-generation, coding]
       preferred: [reasoning]
+    workload_strengths_preferred: [code_generation, code_completion]
     workload:
       latency_sensitivity: medium
       expected_context: medium
@@ -426,8 +431,10 @@ use_cases:
     display_name: Code Review
     category: coding
     capabilities:
-      required: [text-generation, coding, reasoning]
-      preferred: [long-context]
+      # reasoning preferred (not hard) — avoid excluding strong coding agents that are non-thinking
+      required: [text-generation, coding]
+      preferred: [reasoning, long-context, tool-use]
+    workload_strengths_preferred: [code_review, repository_reasoning, general_reasoning]
     workload:
       latency_sensitivity: medium
       expected_context: high
@@ -442,8 +449,9 @@ use_cases:
     display_name: Repository-Level Coding Agent
     category: coding
     capabilities:
-      required: [text-generation, coding, long-context, reasoning, tool-use]
-      preferred: []
+      required: [text-generation, coding, long-context, tool-use]
+      preferred: [reasoning, agentic_coding]
+    workload_strengths_preferred: [repository_reasoning, agentic_coding, long_context]
     workload:
       latency_sensitivity: medium
       expected_context: very-high
@@ -458,8 +466,10 @@ use_cases:
     display_name: Software Engineering Agent
     category: coding
     capabilities:
-      required: [text-generation, coding, reasoning, tool-use]
-      preferred: [long-context]
+      required: [text-generation, coding, tool-use]
+      preferred: [reasoning, long-context, agentic_coding]
+    workload_strengths_preferred:
+      [agentic_coding, repository_reasoning, terminal_tasks, code_generation]
     workload:
       latency_sensitivity: medium
       expected_context: high

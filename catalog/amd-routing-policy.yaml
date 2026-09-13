@@ -1,7 +1,7 @@
-version: '2.3'
+version: '2.4'
 metadata:
   amd_routing_policy:
-    version: '2.3'
+    version: '2.4'
     published: '2026-09-13'
     canonical_path: policies/amd-policy.yaml
   description: Compatibility shim. Canonical AMD routing policy lives at policies/amd-policy.yaml.

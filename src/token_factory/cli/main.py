@@ -407,6 +407,71 @@ def catalog_audit(
 matrix_app = typer.Typer(help="Portfolio / Executive matrix commands")
 app.add_typer(matrix_app, name="matrix")
 
+evidence_app = typer.Typer(help="Evidence catalog audit / gap analysis")
+app.add_typer(evidence_app, name="evidence")
+
+
+@evidence_app.command("audit")
+def evidence_audit_cmd(
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Audit model provenance + evidence catalog coverage."""
+    from token_factory.routing_matrix import RecommendationEngine, load_routing_bundle
+
+    result = RecommendationEngine(load_routing_bundle()).evidence_audit()
+    if json_out:
+        console.print_json(data=result)
+        return
+    gaps = result.get("gaps") or {}
+    console.print(
+        Panel.fit(
+            f"[bold]Evidence Audit[/bold] · policy {result.get('policy_version')}\n"
+            f"Models {result.get('model_count')} · records {result.get('evidence_records')}\n"
+            f"AMD measurements {result.get('amd_measurements')!r}\n"
+            f"Verified models {len(result.get('verified_models') or [])}\n"
+            f"Gaps {gaps.get('gap_count', 0)}"
+        )
+    )
+    console.print(f"[dim]{result.get('statement')}[/dim]")
+    soft = [
+        g
+        for g in (gaps.get("gaps") or [])
+        if g.get("gap") == "amd_performance_evidence_pending"
+    ][:8]
+    if soft:
+        console.print("\n[bold]Soft gaps (AMD measured pending):[/bold]")
+        for g in soft:
+            console.print(f"  • {g.get('model')} [{g.get('maturity')}/{g.get('review_status')}]")
+
+
+@evidence_app.command("gaps")
+def evidence_gaps_cmd(
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """List evidence gaps (pending AMD measured, missing sources, unknown caps)."""
+    from token_factory.routing_matrix import RecommendationEngine, load_routing_bundle
+
+    result = RecommendationEngine(load_routing_bundle()).evidence_gaps()
+    if json_out:
+        console.print_json(data=result)
+        return
+    console.print(
+        Panel.fit(
+            f"[bold]Evidence Gaps[/bold]\n"
+            f"Count {result.get('gap_count')} · records {result.get('record_count')}\n"
+            f"amd_measurements_present={result.get('amd_measurements_present')}"
+        )
+    )
+    by_type: dict[str, int] = {}
+    for g in result.get("gaps") or []:
+        by_type[g.get("gap", "?")] = by_type.get(g.get("gap", "?"), 0) + 1
+    table = Table(title="Gap types")
+    table.add_column("Gap")
+    table.add_column("Count", justify="right")
+    for k, v in sorted(by_type.items(), key=lambda kv: -kv[1]):
+        table.add_row(k, str(v))
+    console.print(table)
+
 
 @matrix_app.command("audit")
 def matrix_audit(
@@ -614,6 +679,106 @@ def recommend(
             console.print("\n[bold]Currently deployed eligible:[/bold]")
             for d in deployed[:5]:
                 console.print(f"  • {d['model']} × {d['compute']} ({d.get('endpoint_id')})")
+
+
+@policy_app.command("audit")
+def policy_audit_cmd(
+    use_case: str | None = typer.Option(
+        None, "--use-case", "-u", help="Optional use-case id (default: coding family sample)"
+    ),
+    lifecycle_mode: str = typer.Option("production", "--lifecycle", "-L"),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Flag Preferred + low evidence / specialization-only style wins."""
+    from token_factory.routing_matrix import RecommendationEngine, load_routing_bundle
+
+    result = RecommendationEngine(load_routing_bundle()).policy_audit(
+        use_case_id=use_case, lifecycle_mode=lifecycle_mode
+    )
+    if json_out:
+        console.print_json(data=result)
+        return
+    console.print(
+        Panel.fit(
+            f"[bold]Policy Audit[/bold] · v{result.get('policy_version')}\n"
+            f"Findings {result.get('finding_count')}"
+        )
+    )
+    for f in (result.get("findings") or [])[:20]:
+        console.print(
+            f"  • {f.get('use_case')}: {f.get('model')} × {f.get('compute')} "
+            f"[{f.get('recommendation')} · {f.get('confidence')} · {f.get('evidence_badge')}]"
+        )
+        for issue in f.get("issues") or []:
+            console.print(f"      - {issue}")
+    if not result.get("findings"):
+        console.print("[green]No Preferred/low-evidence findings in sample.[/green]")
+
+
+@policy_app.command("compare")
+def policy_compare_cmd(
+    use_case: str = typer.Option(..., "--use-case", "-u", help="Use-case id"),
+    model_a: str = typer.Option(..., "--model-a", help="First model id"),
+    model_b: str = typer.Option(..., "--model-b", help="Second model id"),
+    compute: str | None = typer.Option(None, "--compute", "-c", help="Compute id e.g. MI355X"),
+    objective: str | None = typer.Option(None, "--objective", "-o"),
+    lifecycle_mode: str = typer.Option("production", "--lifecycle", "-L"),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Explainable model-vs-model policy comparison (not a benchmark winner)."""
+    from token_factory.routing_matrix import RecommendationEngine, load_routing_bundle
+
+    result = RecommendationEngine(load_routing_bundle()).compare_models(
+        use_case,
+        model_a,
+        model_b,
+        compute_id=compute,
+        objective=objective,
+        lifecycle_mode=lifecycle_mode,
+    )
+    if json_out:
+        console.print_json(data=result)
+        return
+    pref = result.get("policy_preference") or {}
+    console.print(
+        Panel.fit(
+            f"[bold]Policy Compare[/bold] · {use_case}"
+            + (f" · {compute}" if compute else "")
+            + f"\nv{result.get('policy_version')} · objective {result.get('objective')}\n"
+            f"{model_a} vs {model_b}"
+        )
+    )
+    dims = result.get("dimensions") or {}
+    table = Table(title="Capability / strength dimensions")
+    table.add_column("Dimension")
+    table.add_column(model_a.split("/")[-1])
+    table.add_column(model_b.split("/")[-1])
+    for name, row in dims.items():
+        table.add_row(name, str(row.get(model_a)), str(row.get(model_b)))
+    console.print(table)
+    aim = result.get("aim_support") or {}
+    amd = result.get("amd_performance_evidence") or {}
+    console.print(
+        f"AIM support: {model_a.split('/')[-1]}={aim.get(model_a)} · "
+        f"{model_b.split('/')[-1]}={aim.get(model_b)}"
+    )
+    console.print(
+        f"AMD performance evidence: {amd.get(model_a)} · {amd.get(model_b)}"
+    )
+    if pref:
+        console.print(
+            f"\nPolicy preference (not a benchmark win): {pref.get('model')} · "
+            f"{pref.get('recommendation')} · confidence {pref.get('confidence')}"
+        )
+    if result.get("why_a_over_b"):
+        console.print(f"\nWhy {model_a.split('/')[-1]} over {model_b.split('/')[-1]}:")
+        for line in result["why_a_over_b"]:
+            console.print(f"  • {line}")
+    if result.get("why_b_over_a"):
+        console.print(f"\nWhy {model_b.split('/')[-1]} over {model_a.split('/')[-1]}:")
+        for line in result["why_b_over_a"]:
+            console.print(f"  • {line}")
+    console.print(f"\n[yellow]Caveat:[/yellow] {result.get('caveat')}")
 
 
 @policy_app.command("validate")

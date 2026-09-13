@@ -6,7 +6,7 @@ Envoy AI Gateway, or the AIM support catalog. It answers a different question th
 | Layer | Question | Source of truth |
 |-------|----------|-----------------|
 | **AIM Support** | CAN RUN? | `catalog/aims.yaml` (authoritative GA) + `catalog/aims-tech-preview.yaml` (MI350P TP merge) |
-| **AMD Recommendation** | SHOULD RUN? | **`policies/amd-policy.yaml`** (canonical; v2.3) + scoring + **lifecycle filter** |
+| **AMD Recommendation** | SHOULD RUN? | **`policies/amd-policy.yaml`** (canonical; v2.4) + scoring + **lifecycle filter** + [evidence governance](policy-evidence.md) |
 | **Runtime Availability** | AVAILABLE NOW? | `config/endpoints.yaml` (compiled inventory) |
 | **Compiled Routes** | ACTIVE EXECUTION? | Profile overlay (`policies/profiles/amd-*.yaml`) → Semantic Router / AIGW |
 
@@ -215,7 +215,7 @@ token-factory matrix audit -u coding-assistant --view executive
 
 Streamlit tab **AMD Routing Matrix** (`make ui` → tab) **starts at the controls**
 (no Matrix hero blurb). Deep policy narrative is on the **Policies** tab
-([policy-model.md](policy-model.md) / `policies/amd-policy.yaml` v2.3).
+([policy-model.md](policy-model.md) / `policies/amd-policy.yaml` v2.4).
 
 - **View**: Portfolio Matrix (full catalog) \| Executive View (truncated)
 - Controls: Use Case, Objective, Deployment, Lifecycle, Serving Pattern, Traffic, Data Locality, Show, Compute columns (All\|Instinct\|EPYC\|Radeon), Search, Vendor, I Have Compute

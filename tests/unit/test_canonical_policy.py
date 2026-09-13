@@ -30,7 +30,7 @@ def test_canonical_policy_loads_from_policies_path():
     policy = load_canonical_policy(ROOT)
     assert policy.get("_source_path", "").endswith("policies/amd-policy.yaml")
     meta = (policy.get("metadata") or {}).get("amd_routing_policy") or {}
-    assert meta.get("version") == "2.3"
+    assert meta.get("version") == "2.4"
     assert policy.get("overrides")
     nested = policy.get("_canonical") or policy.get("policy") or {}
     assert nested.get("compute_positioning", {}).get("epyc", {}).get("statement")
@@ -42,7 +42,7 @@ def test_catalog_shim_redirects_to_canonical():
     assert bundle["policy"].get("overrides")
     assert (bundle["policy"].get("metadata") or {}).get("amd_routing_policy", {}).get(
         "version"
-    ) == "2.3"
+    ) == "2.4"
 
 
 def test_schema_validation_ok():
@@ -254,7 +254,7 @@ def test_coverage_every_use_case_has_path_or_gap():
 
 def test_ui_metadata_represents_canonical_policy():
     meta = policy_ui_metadata(profile_name="amd-balanced")
-    assert meta["version"] == "2.3"
+    assert meta["version"] == "2.4"
     assert meta["eligibility_rules"]
     assert meta["compute_positioning"]["instinct"]["statement"]
     assert meta["serving_patterns"]["interactive"]

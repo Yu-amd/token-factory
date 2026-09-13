@@ -15,6 +15,25 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from token_factory.catalog.eligibility import SUPPORT_RANK
+from token_factory.routing_matrix.evidence import (
+    audit_evidence_gaps,
+    cap_is_false,
+    cap_is_true,
+    cap_is_unknown,
+    cap_truth,
+    evidence_badge,
+    evidence_category_for_model,
+    evidence_confidence_score,
+    load_evidence_catalog,
+    maturity_for_model,
+    normalize_override,
+    performance_evidence_status,
+    quality_fit_from_strengths,
+    recommendation_confidence,
+    records_for_model,
+    review_status_for_model,
+    strength_level,
+)
 from token_factory.routing_matrix.loader import load_routing_bundle
 from token_factory.routing_matrix.portfolio import (
     EXECUTIVE_TOP_ROWS,
@@ -51,6 +70,10 @@ CAP_KEY = {
     "tool_use": "tool_use",
     "long-context": "long_context",
     "long_context": "long_context",
+    "agentic-coding": "agentic_coding",
+    "agentic_coding": "agentic_coding",
+    "repository-reasoning": "repository_reasoning",
+    "repository_reasoning": "repository_reasoning",
 }
 
 SIZE_TIER = {
@@ -71,7 +94,8 @@ PRIVATE_EVAL_CHANNEL = "private-eval-container"
 # Executive-only truncation budget (Portfolio never silently truncates).
 MATRIX_TOP_ROWS = EXECUTIVE_TOP_ROWS
 
-# Soft generation bias for balanced — small deltas, NOT primary rank key
+# Soft generation bias — tie-breaker only unless AMD_MEASURED evidence exists.
+# Applied outside performance_fit (final sort nudge), not as a primary rank key.
 INSTINCT_GEN_BIAS = {
     "MI250X": 0,
     "MI300X": 2,
@@ -143,12 +167,18 @@ class Candidate:
     override: bool = False
     production_eligible: bool = True
     capability_fit: float = 0.0
+    quality_fit: float = 0.0
     performance_fit: float = 0.0
     economic_fit: float = 0.0
     deployment_fit: float = 0.0
     lifecycle_fit: float = 0.0
     serving_pattern_fit: float = 0.0
     locality_fit: float = 0.0
+    evidence_confidence: float = 0.0
+    performance_evidence: dict[str, Any] = field(default_factory=dict)
+    evidence_badge: str = "?"
+    rationale: dict[str, list[str]] = field(default_factory=dict)
+    policy_override: dict[str, Any] | None = None
     preference_label: str | None = None
     lifecycle_excluded: bool = False
     exclusion_reason: str | None = None
@@ -180,12 +210,18 @@ class Candidate:
             "override": self.override,
             "production_eligible": self.production_eligible,
             "capability_fit": round(self.capability_fit, 3),
+            "quality_fit": round(self.quality_fit, 3),
             "performance_fit": round(self.performance_fit, 3),
             "economic_fit": round(self.economic_fit, 3),
             "deployment_fit": round(self.deployment_fit, 3),
             "lifecycle_fit": round(self.lifecycle_fit, 3),
             "serving_pattern_fit": round(self.serving_pattern_fit, 3),
             "locality_fit": round(self.locality_fit, 3),
+            "evidence_confidence": round(self.evidence_confidence, 3),
+            "performance_evidence": self.performance_evidence,
+            "evidence_badge": self.evidence_badge,
+            "rationale": self.rationale,
+            "policy_override": self.policy_override,
             "preference_label": self.preference_label,
             "lifecycle_excluded": self.lifecycle_excluded,
             "exclusion_reason": self.exclusion_reason,
@@ -219,6 +255,7 @@ class RecommendationEngine:
         self.obj_aliases = self.bundle["use_cases"].get("priority_mode_aliases", {})
         self.lifecycle_modes = self.bundle["use_cases"].get("lifecycle_modes") or {}
         self.capability_floors = self.bundle["use_cases"].get("capability_floors") or {}
+        self.evidence = self.bundle.get("evidence") or load_evidence_catalog()
 
     def list_use_cases(self) -> list[dict[str, Any]]:
         return [
@@ -423,17 +460,55 @@ class RecommendationEngine:
         name = self.capability_floors.get(use_case_id, "standard")
         return TIER_NAME.get(name, 2)
 
-    def _capability_ok(self, model: str, use_case: dict[str, Any]) -> tuple[bool, str]:
+    def _capability_ok(
+        self, model: str, use_case: dict[str, Any], *, lifecycle_mode: str | None = None
+    ) -> tuple[bool, str, str | None]:
+        """Hard capability gate with tri-state handling.
+
+        Returns (ok, why, exclusion_kind).
+        unknown on a required capability → metadata-incomplete (not silent false).
+        Production excludes unknown; evaluation/all may admit with degraded confidence.
+        """
         caps = self._model_caps(model)
         required = (use_case.get("capabilities") or {}).get("required") or []
+        mode = (lifecycle_mode or "production").lower()
+        allow_unknown = mode in ("evaluation", "all", "tech-preview", "tech_preview")
         for req in required:
             key = CAP_KEY.get(req, req.replace("-", "_"))
             # multimodal requirement satisfied by vision
-            if key == "multimodal" and (caps.get("multimodal") or caps.get("vision")):
+            if key == "multimodal" and (
+                cap_is_true(caps.get("multimodal")) or cap_is_true(caps.get("vision"))
+            ):
                 continue
-            if not caps.get(key, False):
-                return False, f"missing required capability '{req}'"
-        return True, "ok"
+            # agentic_coding soft-satisfied by coding+tool_use when agentic unknown
+            if key == "agentic_coding":
+                val = caps.get(key, caps.get("coding"))
+                if cap_is_true(val):
+                    continue
+                if cap_is_unknown(val) and allow_unknown:
+                    continue
+                if cap_is_unknown(val):
+                    return (
+                        False,
+                        f"required capability '{req}' is unknown (metadata-incomplete)",
+                        "metadata_incomplete",
+                    )
+                if not cap_is_true(val):
+                    return False, f"missing required capability '{req}'", "capability"
+                continue
+            val = caps.get(key, False)
+            if cap_is_true(val):
+                continue
+            if cap_is_unknown(val):
+                if allow_unknown:
+                    continue
+                return (
+                    False,
+                    f"required capability '{req}' is unknown (metadata-incomplete)",
+                    "metadata_incomplete",
+                )
+            return False, f"missing required capability '{req}'", "capability"
+        return True, "ok", None
 
     def _aim_cells(self, model: str) -> list[tuple[str, str, str, str]]:
         """Return (family, compute_id, support_level, lifecycle)."""
@@ -456,13 +531,16 @@ class RecommendationEngine:
 
     def _override_level(
         self, use_case_id: str, model: str, compute_id: str
-    ) -> tuple[str | None, list[str]]:
+    ) -> tuple[str | None, list[str], dict[str, Any] | None]:
         overrides = (self.policy.get("overrides") or {}).get(use_case_id) or {}
         model_ov = overrides.get(model) or {}
         cell = model_ov.get(compute_id)
         if not cell:
-            return None, []
-        return cell.get("recommendation"), list(cell.get("rationale") or [])
+            return None, [], None
+        norm = normalize_override(cell if isinstance(cell, dict) else {"recommendation": cell})
+        decision = (norm or {}).get("decision")
+        rationale = list((norm or {}).get("rationale") or [])
+        return decision, rationale, norm
 
     def _base_level(self, aim_support: str, lifecycle: str) -> str:
         if lifecycle == "tech-preview":
@@ -504,7 +582,7 @@ class RecommendationEngine:
         data_locality: bool,
         serving_pattern: str = "interactive",
         latency_requirement: str = "important",
-    ) -> tuple[float, float, float, float, float, float, float, list[str]]:
+    ) -> tuple[float, float, float, float, float, float, float, float, float, list[str]]:
         reasons: list[str] = []
         meta = self.models.get(model, {})
         compute = self.compute.get(compute_id, {})
@@ -528,17 +606,24 @@ class RecommendationEngine:
         pref_caps = (use_case.get("capabilities") or {}).get("preferred") or []
         for pref in pref_caps:
             key = CAP_KEY.get(pref, pref.replace("-", "_"))
-            if caps.get(key):
+            if cap_is_true(caps.get(key)):
                 capability_fit = min(1.0, capability_fit + 0.05)
+            elif cap_is_unknown(caps.get(key)):
+                # unknown preferred caps degrade confidence later; tiny soft nudge only
+                capability_fit = min(1.0, capability_fit + 0.01)
 
+        # Specialization is a weak hint only (quality_fit carries task strengths)
         spec = meta.get("specialization")
         cat = use_case.get("category")
         if spec and cat and spec == cat:
-            # Specialization must beat size_class soft bias alone on same compute
-            capability_fit = min(1.0, capability_fit + 0.18)
-            reasons.append(f"specialization matches '{cat}'")
+            capability_fit = min(1.0, capability_fit + 0.03)
+            reasons.append(f"weak specialization hint '{cat}'")
 
-        # --- performance_fit ---
+        # --- quality_fit (workload strengths; not model size) ---
+        quality_fit, q_reasons = quality_fit_from_strengths(meta, use_case_id, use_case)
+        reasons.extend(q_reasons)
+
+        # --- performance_fit (runtime appropriateness; no generation auto-win) ---
         performance_fit = 0.45
         if chars.get("high_throughput"):
             performance_fit += 0.25
@@ -550,7 +635,7 @@ class RecommendationEngine:
                 performance_fit += 0.15
         if aim_support == "optimized":
             performance_fit += 0.1
-        performance_fit += INSTINCT_GEN_BIAS.get(compute_id, 0) * 0.02
+        # INSTINCT_GEN_BIAS intentionally NOT applied here — tie-break in ranking only
         if family == "radeon" and utilization == "high":
             performance_fit -= 0.25
             reasons.append("high traffic: Radeon concurrency limited vs Instinct")
@@ -658,14 +743,22 @@ class RecommendationEngine:
         elif chars.get("rack_scale"):
             locality_fit = 0.35
 
+        # --- evidence_confidence (dimension 0-1; label computed later) ---
+        perf_ev = performance_evidence_status(
+            self.evidence, meta, model, compute_id, use_case_id
+        )
+        evidence_conf = evidence_confidence_score(meta, str(perf_ev.get("status") or "NO_DATA"))
+
         return (
             capability_fit,
+            quality_fit,
             performance_fit,
             economic_fit,
             deployment_fit,
             lifecycle_fit,
             serving_pattern_fit,
             locality_fit,
+            evidence_conf,
             reasons,
         )
 
@@ -684,14 +777,17 @@ class RecommendationEngine:
         utilization: str,
         data_locality: bool,
         capability_fit: float,
-        performance_fit: float,
-        economic_fit: float,
-        lifecycle_fit: float,
+        quality_fit: float = 0.5,
+        performance_fit: float = 0.5,
+        economic_fit: float = 0.5,
+        lifecycle_fit: float = 0.5,
         deployment_fit: float = 0.5,
         serving_pattern_fit: float = 0.5,
         locality_fit: float = 0.5,
+        evidence_confidence: float = 0.5,
         serving_pattern: str = "interactive",
         latency_requirement: str = "important",
+        amd_measured: bool = False,
     ) -> tuple[float, list[str], str, str | None]:
         reasons: list[str] = []
         compute = self.compute.get(compute_id, {})
@@ -710,10 +806,12 @@ class RecommendationEngine:
         reasons.append(f"AIM support={aim_support}")
         score += LEVEL_ORDER.get(level, 0) * 15
 
-        # Coding/specialization must matter more than size_class soft bias alone
+        # Specialization / name hints — weak tie-breakers only (do not dominate evidence)
         if spec_match:
-            score += 22
-            reasons.append(f"specialization='{spec}' aligned with category='{cat}'")
+            score += 3
+            reasons.append(f"weak specialization hint '{spec}' (tie-breaker)")
+        if "coder" in model.lower() and (cat == "coding" or use_case_id.startswith("cod")):
+            score += 1
 
         # Fit-weighted by objective (NOT model size as ranking algorithm)
         if objective == "lowest-cost-sufficient":
@@ -724,28 +822,35 @@ class RecommendationEngine:
                 score -= 80
                 reasons.append("incapable: below capability floor")
             else:
-                score += capability_fit * 40
+                score += capability_fit * 30
+                score += quality_fit * 20
                 score += economic_fit * 55
-                score += performance_fit * 10
+                score += performance_fit * 8
                 score += lifecycle_fit * 5
                 score += serving_pattern_fit * 8
+                score += evidence_confidence * 5
                 score -= self._hw_cost_rank(compute_id) * 8
                 reasons.append("lowest-cost-sufficient: prefer cheaper class that clears floor")
             pref_label = "ECONOMIC_PREFERRED"
 
         elif objective == "token-cost":
             score += economic_fit * 45
-            score += capability_fit * 25
-            score += performance_fit * 15
+            score += capability_fit * 20
+            score += quality_fit * 10
+            score += performance_fit * 12
             score += lifecycle_fit * 5
             score += serving_pattern_fit * 5
+            score += evidence_confidence * 5
             reasons.append(f"relative cost class={rel_cost}")
 
         elif objective in ("quality", "throughput"):
-            score += performance_fit * 50
-            score += capability_fit * 30
-            score += lifecycle_fit * 10
-            score += economic_fit * 5  # economics only weak
+            # Quality objective prioritizes quality_fit + evidence over generation bias
+            score += quality_fit * 40
+            score += capability_fit * 25
+            score += performance_fit * 20
+            score += evidence_confidence * 15
+            score += lifecycle_fit * 8
+            score += economic_fit * 4
             score += serving_pattern_fit * 5
             pref_label = "PERFORMANCE_PREFERRED"
 
@@ -755,13 +860,16 @@ class RecommendationEngine:
                 score += 25
                 reasons.append("local workstation for interactive latency")
                 pref_label = "LOCAL_PREFERRED"
-            score += capability_fit * 20
+            score += capability_fit * 15
+            score += quality_fit * 10
             score += lifecycle_fit * 5
+            score += evidence_confidence * 5
             if latency_requirement == "critical":
                 score += serving_pattern_fit * 10
 
         elif objective == "edge-local":
-            score += capability_fit * 30
+            score += capability_fit * 25
+            score += quality_fit * 10
             if chars.get("local_workstation") or chars.get("edge_friendly"):
                 score += 45
                 reasons.append("edge/local/workstation friendly compute")
@@ -776,26 +884,31 @@ class RecommendationEngine:
             score += economic_fit * 10
             score += lifecycle_fit * 5
             score += locality_fit * 15
+            score += evidence_confidence * 5
             if family == "radeon":
                 score += 12
 
         elif objective == "enterprise":
-            score += lifecycle_fit * 35
-            score += performance_fit * 30
-            score += capability_fit * 25
+            score += lifecycle_fit * 30
+            score += performance_fit * 22
+            score += capability_fit * 20
+            score += quality_fit * 15
             score += deployment_fit * 10
+            score += evidence_confidence * 10
             if lifecycle != "ga":
                 score -= 40
             pref_label = "PRODUCTION_PREFERRED"
 
         else:  # balanced
-            score += capability_fit * 28
-            score += performance_fit * 24
-            score += economic_fit * 22
-            score += lifecycle_fit * 12
+            score += capability_fit * 22
+            score += quality_fit * 18
+            score += performance_fit * 18
+            score += economic_fit * 18
+            score += lifecycle_fit * 10
             score += deployment_fit * 8
-            score += serving_pattern_fit * 10
-            score += locality_fit * 6
+            score += serving_pattern_fit * 8
+            score += locality_fit * 5
+            score += evidence_confidence * 8
             if utilization == "low" and (
                 chars.get("local_workstation")
                 or chars.get("cpu_inference")
@@ -830,10 +943,17 @@ class RecommendationEngine:
         if family in fam_order:
             score += max(0, 8 - fam_order.index(family) * 3)
 
-        # Size bias is soft tie-break only (max ~4) — specialization already +22
+        # Size bias is soft tie-break only (max ~4)
         size_order = (self.policy.get("objective_size_bias") or {}).get(objective) or []
         if size in size_order:
             score += max(0, 4 - size_order.index(size))
+
+        # INSTINCT generation bias: tiny tie-breaker unless AMD measured evidence present
+        gen = INSTINCT_GEN_BIAS.get(compute_id, 0)
+        if amd_measured:
+            score += gen * 0.5  # measured path may weight generation lightly
+        else:
+            score += gen * 0.05  # otherwise negligible tie-break only
 
         # Deployment soft match
         score += deployment_fit * 5
@@ -884,7 +1004,9 @@ class RecommendationEngine:
         locality_exclusions: list[Candidate] = []
 
         for model in self.aims:
-            ok, why = self._capability_ok(model, use_case)
+            ok, why, excl_kind = self._capability_ok(
+                model, use_case, lifecycle_mode=lifecycle_mode
+            )
             if not ok:
                 continue
             preferred_models = use_case.get("preferred_models") or []
@@ -921,19 +1043,23 @@ class RecommendationEngine:
                 production_eligible = lifecycle == "ga"
                 lifecycle_ok = lifecycle in allowed
 
-                ov_level, ov_reasons = self._override_level(use_case_id, model, compute_id)
+                ov_level, ov_reasons, ov_norm = self._override_level(
+                    use_case_id, model, compute_id
+                )
                 level = ov_level or self._base_level(aim_support, lifecycle)
                 if preferred_models and model in preferred_models and not ov_level:
                     level = "PREFERRED"
 
                 (
                     cap_f,
+                    qual_f,
                     perf_f,
                     econ_f,
                     dep_f,
                     life_f,
                     serve_f,
                     loc_f,
+                    evid_f,
                     fit_reasons,
                 ) = self._fits(
                     use_case=use_case,
@@ -954,6 +1080,11 @@ class RecommendationEngine:
                     if self._model_tier(model) < self._floor_tier(use_case_id):
                         continue
 
+                meta = self.models.get(model, {})
+                perf_ev = performance_evidence_status(
+                    self.evidence, meta, model, compute_id, use_case_id
+                )
+                amd_measured = str(perf_ev.get("status")) == "AMD_MEASURED"
                 score, score_reasons, cost_conf, pref_label = self._score(
                     use_case=use_case,
                     use_case_id=use_case_id,
@@ -967,16 +1098,83 @@ class RecommendationEngine:
                     utilization=utilization,
                     data_locality=data_locality,
                     capability_fit=cap_f,
+                    quality_fit=qual_f,
                     performance_fit=perf_f,
                     economic_fit=econ_f,
                     lifecycle_fit=life_f,
                     deployment_fit=dep_f,
                     serving_pattern_fit=serve_f,
                     locality_fit=loc_f,
+                    evidence_confidence=evid_f,
                     serving_pattern=serving_pattern,
                     latency_requirement=latency_requirement,
+                    amd_measured=amd_measured,
                 )
                 reasons = ov_reasons + fit_reasons + score_reasons
+                conf_label = recommendation_confidence(
+                    meta=meta,
+                    aim_support=aim_support,
+                    lifecycle=lifecycle,
+                    level=level,
+                    performance_status=str(perf_ev.get("status") or "NO_DATA"),
+                    evidence_doc=self.evidence,
+                    model=model,
+                    use_case_id=use_case_id,
+                )
+                rationale = {
+                    "eligibility": [
+                        f"AIM support={aim_support}",
+                        f"lifecycle={lifecycle}",
+                        f"capability gate ok for {use_case_id}",
+                    ],
+                    "strengths": [
+                        r for r in fit_reasons
+                        if "strength" in r.lower()
+                        or "clears" in r.lower()
+                        or "matches" in r.lower()
+                        or "hint" in r.lower()
+                        or "favors" in r.lower()
+                        or "optimized" in r.lower()
+                    ][:6] or reasons[:3],
+                    "weaknesses": [
+                        r for r in reasons
+                        if any(
+                            x in r.lower()
+                            for x in (
+                                "below",
+                                "weak",
+                                "penal",
+                                "pending",
+                                "excluded",
+                                "capped",
+                                "not suited",
+                            )
+                        )
+                    ][:6],
+                    "evidence": [
+                        f"category={evidence_category_for_model(meta)}",
+                        f"maturity={maturity_for_model(meta)}",
+                        f"performance_evidence={perf_ev.get('status')}",
+                        f"review_status={review_status_for_model(meta)}",
+                    ],
+                    "uncertainties": [
+                        u
+                        for u in [
+                            perf_ev.get("caveat"),
+                            (
+                                "AMD comparative performance evidence pending"
+                                if not amd_measured
+                                else None
+                            ),
+                            (
+                                "Preferred without AMD_MEASURED → confidence capped"
+                                if level == "PREFERRED" and not amd_measured
+                                else None
+                            ),
+                        ]
+                        if u
+                    ],
+                }
                 if preferred_models and model not in preferred_models:
                     score -= 25
                     reasons.append("not in use-case preferred_models")
@@ -1012,24 +1210,25 @@ class RecommendationEngine:
                     override=bool(ov_level),
                     production_eligible=production_eligible,
                     capability_fit=cap_f,
+                    quality_fit=qual_f,
                     performance_fit=perf_f,
                     economic_fit=econ_f,
                     deployment_fit=dep_f,
                     lifecycle_fit=life_f,
                     serving_pattern_fit=serve_f,
                     locality_fit=loc_f,
+                    evidence_confidence=evid_f,
+                    performance_evidence=perf_ev,
+                    evidence_badge=str(
+                        perf_ev.get("badge")
+                        or evidence_badge(evidence_category_for_model(meta))
+                    ),
+                    rationale=rationale,
+                    policy_override=ov_norm,
                     preference_label=pref_label,
                     availability=availability,
                     deployment_channel=deployment_channel,
-                    confidence=(
-                        "high"
-                        if aim_support == "optimized"
-                        and level == "PREFERRED"
-                        and lifecycle == "ga"
-                        else "experimental"
-                        if lifecycle in ("preview", "tech-preview") or aim_support == "preview"
-                        else "medium"
-                    ),
+                    confidence=conf_label,
                 )
 
                 if not lifecycle_ok:
@@ -1415,10 +1614,12 @@ class RecommendationEngine:
         why_not: dict[str, list[str]] = {}
 
         for model in catalog_models:
-            ok, why = self._capability_ok(model, use_case)
+            ok, why, excl_kind = self._capability_ok(
+                model, use_case, lifecycle_mode=lifecycle_mode
+            )
             capability_ok_map[model] = ok
             capability_why[model] = why if not ok else ""
-            meta_bad = metadata_incomplete(self, model)
+            meta_bad = metadata_incomplete(self, model) or excl_kind == "metadata_incomplete"
             row_cells: dict[str, Any] = {}
 
             aim_cells = {
@@ -1815,6 +2016,285 @@ class RecommendationEngine:
             "locality_note": rec.get("locality_note"),
             "policy_version": rec["policy_version"],
             "cost_data": rec["cost_data"],
+        }
+
+    def compare_models(
+        self,
+        use_case_id: str,
+        model_a: str,
+        model_b: str,
+        *,
+        compute_id: str | None = None,
+        objective: str | None = None,
+        lifecycle_mode: str | None = "production",
+        serving_pattern: str | None = None,
+        utilization: str = "medium",
+    ) -> dict[str, Any]:
+        """Structured model-vs-model comparison for a use case (explainable, no fabricated wins)."""
+        if use_case_id not in self.use_cases:
+            raise KeyError(f"unknown use case: {use_case_id}")
+        from token_factory.routing_matrix.loader import normalize_model_id as _norm
+
+        model_a = _norm(model_a, self.model_aliases)
+        model_b = _norm(model_b, self.model_aliases)
+
+        rec = self.recommend(
+            use_case_id,
+            objective=objective,
+            compute_filter=compute_id,
+            lifecycle_mode=lifecycle_mode,
+            serving_pattern=serving_pattern,
+            utilization=utilization,
+            show="all",
+        )
+        def _pick(mid: str) -> dict[str, Any] | None:
+            pool = rec.get("ranked") or rec.get("candidates") or []
+            matches = [c for c in pool if c.get("model") == mid]
+            if compute_id:
+                matches = [c for c in matches if c.get("compute") == compute_id]
+            return matches[0] if matches else None
+
+        ca, cb = _pick(model_a), _pick(model_b)
+        meta_a = self.models.get(model_a) or {}
+        meta_b = self.models.get(model_b) or {}
+        use_case = self.use_cases[use_case_id]
+
+        def _cap_row(meta: dict[str, Any], key: str) -> str:
+            caps = meta.get("capabilities") or {}
+            from token_factory.routing_matrix.evidence import cap_truth
+
+            t = cap_truth(caps.get(key))
+            return {"true": "✓", "false": "✗", "unknown": "?"}.get(t, "?")
+
+        def _strength(meta: dict[str, Any], key: str) -> str:
+            return strength_level(meta, key)
+
+        dimensions = {
+            "capability_coding": {
+                model_a: _cap_row(meta_a, "coding"),
+                model_b: _cap_row(meta_b, "coding"),
+            },
+            "capability_reasoning": {
+                model_a: _cap_row(meta_a, "reasoning"),
+                model_b: _cap_row(meta_b, "reasoning"),
+            },
+            "capability_long_context": {
+                model_a: _cap_row(meta_a, "long_context"),
+                model_b: _cap_row(meta_b, "long_context"),
+            },
+            "capability_agentic_coding": {
+                model_a: _cap_row(meta_a, "agentic_coding"),
+                model_b: _cap_row(meta_b, "agentic_coding"),
+            },
+            "strength_agentic_coding": {
+                model_a: _strength(meta_a, "agentic_coding"),
+                model_b: _strength(meta_b, "agentic_coding"),
+            },
+            "strength_repository_reasoning": {
+                model_a: _strength(meta_a, "repository_reasoning"),
+                model_b: _strength(meta_b, "repository_reasoning"),
+            },
+            "strength_general_reasoning": {
+                model_a: _strength(meta_a, "general_reasoning"),
+                model_b: _strength(meta_b, "general_reasoning"),
+            },
+            "strength_long_context": {
+                model_a: _strength(meta_a, "long_context"),
+                model_b: _strength(meta_b, "long_context"),
+            },
+        }
+
+        aim_a = (ca or {}).get("aim_support")
+        aim_b = (cb or {}).get("aim_support")
+        if not ca or not cb:
+            # fall back to AIM cells if filtered out of ranked
+            for mid, slot in ((model_a, "a"), (model_b, "b")):
+                cells = self._aim_cells(mid)
+                pick = None
+                if compute_id:
+                    pick = next((x for x in cells if x[1] == compute_id), None)
+                if not pick and cells:
+                    pick = cells[0]
+                if slot == "a" and not aim_a and pick:
+                    aim_a = pick[2]
+                if slot == "b" and not aim_b and pick:
+                    aim_b = pick[2]
+
+        pe_a = (ca or {}).get("performance_evidence") or performance_evidence_status(
+            self.evidence, meta_a, model_a, compute_id or "MI355X", use_case_id
+        )
+        pe_b = (cb or {}).get("performance_evidence") or performance_evidence_status(
+            self.evidence, meta_b, model_b, compute_id or "MI355X", use_case_id
+        )
+
+        why_a_over_b: list[str] = []
+        why_b_over_a: list[str] = []
+        if ca and cb:
+            if (ca.get("rank") or 999) < (cb.get("rank") or 999):
+                why_a_over_b.append(
+                    f"Ranks higher under objective={rec.get('objective')} "
+                    f"(#{ca.get('rank')} vs #{cb.get('rank')})"
+                )
+            elif (cb.get("rank") or 999) < (ca.get("rank") or 999):
+                why_b_over_a.append(
+                    f"Ranks higher under objective={rec.get('objective')} "
+                    f"(#{cb.get('rank')} vs #{ca.get('rank')})"
+                )
+            if (ca.get("quality_fit") or 0) > (cb.get("quality_fit") or 0) + 0.05:
+                why_a_over_b.append(
+                    f"Higher quality_fit ({ca.get('quality_fit')} vs {cb.get('quality_fit')})"
+                )
+            if (cb.get("quality_fit") or 0) > (ca.get("quality_fit") or 0) + 0.05:
+                why_b_over_a.append(
+                    f"Higher quality_fit ({cb.get('quality_fit')} vs {ca.get('quality_fit')})"
+                )
+            if ca.get("override") and not cb.get("override"):
+                why_a_over_b.append("Explicit policy override present")
+            if cb.get("override") and not ca.get("override"):
+                why_b_over_a.append("Explicit policy override present")
+        elif ca and not cb:
+            why_a_over_b.append(f"{model_b} not in eligible ranked set for this filter")
+        elif cb and not ca:
+            why_b_over_a.append(f"{model_a} not in eligible ranked set for this filter")
+
+        caveat = (
+            "AMD comparative performance evidence is not yet available for this pair; "
+            "differences reflect capability metadata, AIM support, and policy — not measured AMD superiority."
+        )
+        if pe_a.get("status") == "AMD_MEASURED" and pe_b.get("status") == "AMD_MEASURED":
+            caveat = "Both sides have AMD_MEASURED evidence on file."
+
+        preferred = None
+        if ca and cb:
+            if (ca.get("rank") or 999) <= (cb.get("rank") or 999):
+                preferred = {
+                    "model": model_a,
+                    "recommendation": ca.get("recommendation"),
+                    "confidence": ca.get("confidence"),
+                    "compute": ca.get("compute"),
+                }
+            else:
+                preferred = {
+                    "model": model_b,
+                    "recommendation": cb.get("recommendation"),
+                    "confidence": cb.get("confidence"),
+                    "compute": cb.get("compute"),
+                }
+
+        return {
+            "use_case": use_case_id,
+            "compute": compute_id,
+            "objective": rec.get("objective"),
+            "lifecycle_mode": rec.get("lifecycle_mode"),
+            "policy_version": rec.get("policy_version"),
+            "models": {
+                model_a: {
+                    "candidate": ca,
+                    "capabilities": meta_a.get("capabilities"),
+                    "strengths": meta_a.get("strengths"),
+                    "evidence": meta_a.get("evidence"),
+                    "aim_support": aim_a,
+                    "performance_evidence": pe_a,
+                },
+                model_b: {
+                    "candidate": cb,
+                    "capabilities": meta_b.get("capabilities"),
+                    "strengths": meta_b.get("strengths"),
+                    "evidence": meta_b.get("evidence"),
+                    "aim_support": aim_b,
+                    "performance_evidence": pe_b,
+                },
+            },
+            "dimensions": dimensions,
+            "aim_support": {model_a: aim_a, model_b: aim_b},
+            "amd_performance_evidence": {
+                model_a: pe_a.get("status"),
+                model_b: pe_b.get("status"),
+            },
+            "why_a_over_b": why_a_over_b,
+            "why_b_over_a": why_b_over_a,
+            "policy_preference": preferred,
+            "caveat": caveat,
+            "language_note": "Avoid Best/Winner/Superior — this is a policy comparison with evidence status.",
+        }
+
+    def evidence_audit(self) -> dict[str, Any]:
+        """Audit model provenance + evidence catalog coverage."""
+        models = list(self.models.values())
+        gaps = audit_evidence_gaps(models, self.evidence)
+        verified = [
+            m["model"]
+            for m in models
+            if review_status_for_model(m) == "verified"
+        ]
+        return {
+            "policy_version": (self.policy.get("metadata") or {})
+            .get("amd_routing_policy", {})
+            .get("version")
+            or self.policy.get("policy", {}).get("policy_version"),
+            "model_count": len(models),
+            "evidence_records": len(self.evidence.get("records") or []),
+            "amd_measurements": self.evidence.get("amd_measurements"),
+            "verified_models": verified,
+            "gaps": gaps,
+            "statement": (
+                "Token Factory recommendations are policy decisions derived from model "
+                "capability, AMD AIM support, deployment requirements, lifecycle, economics, "
+                "and available performance evidence. Missing evidence lowers recommendation "
+                "confidence and should not be interpreted as proof of inferiority."
+            ),
+        }
+
+    def evidence_gaps(self) -> dict[str, Any]:
+        return audit_evidence_gaps(list(self.models.values()), self.evidence)
+
+    def policy_audit(
+        self,
+        *,
+        use_case_id: str | None = None,
+        lifecycle_mode: str = "production",
+    ) -> dict[str, Any]:
+        """Flag Preferred + low evidence / specialization-only style wins."""
+        targets = [use_case_id] if use_case_id else [
+            u for u in self.use_cases if str(self.use_cases[u].get("category")) == "coding"
+        ][:8] or list(self.use_cases)[:5]
+        findings: list[dict[str, Any]] = []
+        for uc in targets:
+            if uc not in self.use_cases:
+                continue
+            rec = self.recommend(uc, lifecycle_mode=lifecycle_mode, show="recommended")
+            for c in (rec.get("ranked") or [])[:5]:
+                issues: list[str] = []
+                if c.get("recommendation") == "PREFERRED" and str(c.get("confidence")).lower() in (
+                    "low",
+                    "experimental",
+                    "medium",
+                ):
+                    pe = (c.get("performance_evidence") or {}).get("status")
+                    if pe != "AMD_MEASURED":
+                        issues.append("PREFERRED without AMD_MEASURED evidence")
+                    if str(c.get("confidence")).lower() != "high":
+                        issues.append(f"confidence={c.get('confidence')} (not High)")
+                reasons = " ".join(c.get("reasons") or []).lower()
+                if "specialization" in reasons and "amd_measured" not in reasons:
+                    if (c.get("quality_fit") or 0) < 0.6:
+                        issues.append("specialization hint without strong quality_fit")
+                if issues:
+                    findings.append(
+                        {
+                            "use_case": uc,
+                            "model": c.get("model"),
+                            "compute": c.get("compute"),
+                            "recommendation": c.get("recommendation"),
+                            "confidence": c.get("confidence"),
+                            "evidence_badge": c.get("evidence_badge"),
+                            "issues": issues,
+                        }
+                    )
+        return {
+            "policy_version": rec.get("policy_version") if targets else None,
+            "findings": findings,
+            "finding_count": len(findings),
         }
 
 
