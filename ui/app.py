@@ -11,7 +11,7 @@ import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[1]
 META_PATH = ROOT / "generated" / "ui-metadata.json"
-GATEWAY = os.environ.get("TF_GATEWAY_URL", "http://localhost:8080")
+GATEWAY = os.environ.get("TF_GATEWAY_URL", "http://127.0.0.1:18080")
 VIRTUAL_MODEL = os.environ.get("TF_VIRTUAL_MODEL", "token-factory/auto")
 
 st.set_page_config(page_title="AMD Token Factory", page_icon="🏭", layout="wide")
@@ -47,7 +47,14 @@ checks = [
     ("Prometheus", links.get("prometheus", "http://localhost:9090")),
 ]
 for col, (name, url) in zip(cols, checks):
-    path = "/-/healthy" if "9090" in url else "/health"
+    if "9090" in url:
+        path = "/-/healthy"
+    elif "8080" in url or "18080" in url or name == "Gateway":
+        path = "/v1/models"
+    elif "8700" in url or "Dashboard" in name:
+        path = "/"
+    else:
+        path = "/health"
     col.metric(name, probe(url, path))
 
 tab_chat, tab_route, tab_arch, tab_inv, tab_pol, tab_ops = st.tabs(
@@ -61,12 +68,28 @@ with tab_chat:
         try:
             r = httpx.post(
                 f"{GATEWAY}/v1/chat/completions",
-                json={"model": VIRTUAL_MODEL, "messages": [{"role": "user", "content": prompt}]},
-                timeout=60.0,
+                headers={"Authorization": "Bearer demo-key"},
+                json={
+                    "model": VIRTUAL_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 256,
+                },
+                timeout=120.0,
             )
-            st.json(r.json())
+            if r.status_code >= 400:
+                st.error(f"HTTP {r.status_code}: {r.text[:500]}")
+            else:
+                body = r.json()
+                msg = (body.get("choices") or [{}])[0].get("message", {})
+                content = msg.get("content") or msg.get("reasoning") or ""
+                st.write(content or "(empty content)")
+                with st.expander("Raw response"):
+                    st.json(body)
+                st.caption(
+                    f"model={body.get('model')} · gateway={GATEWAY}"
+                )
         except Exception as exc:
-            st.error(str(exc))
+            st.error(f"{exc} — is the gateway up? Run: token-factory ports start")
 
 with tab_route:
     st.subheader("Routing decisions")

@@ -28,8 +28,14 @@ class PortForwardSpec:
     remote_port: int
 
 
+# Local gateway port is 18080 — avoid clash with kind hostPort 0.0.0.0:8080 on older
+# clusters (IPv4 localhost then resets while kubectl PF only binds [::1]:8080).
+GATEWAY_LOCAL_PORT = int(os.environ.get("TF_GATEWAY_LOCAL_PORT", "18080"))
+
 DEFAULT_FORWARDS: list[PortForwardSpec] = [
-    PortForwardSpec("ai-gateway", "envoy-gateway-system", "envoy-gateway", 8080, 80),
+    PortForwardSpec(
+        "ai-gateway", "envoy-gateway-system", "envoy-gateway", GATEWAY_LOCAL_PORT, 80
+    ),
     PortForwardSpec("semantic-router-api", SR_NAMESPACE, "semantic-router", 8081, 8080),
     PortForwardSpec(
         "semantic-router-dashboard",
@@ -171,6 +177,8 @@ def _start_one_forward(
     cmd = [
         "kubectl",
         "port-forward",
+        "--address",
+        "127.0.0.1",
         "-n",
         spec.namespace,
         f"svc/{svc}",

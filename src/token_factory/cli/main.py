@@ -53,8 +53,8 @@ def _probe(url: str, path: str) -> str:
 @app.command()
 def status() -> None:
     """Check health of stack components."""
-    gateway = os.environ.get("TF_GATEWAY_URL", "http://localhost:8080")
-    sr_api = os.environ.get("TF_SR_URL", "http://localhost:8081")
+    gateway = os.environ.get("TF_GATEWAY_URL", "http://127.0.0.1:18080")
+    sr_api = os.environ.get("TF_SR_URL", "http://127.0.0.1:8081")
     dashboard = os.environ.get("TF_SR_DASHBOARD_URL", "http://localhost:8700")
     grafana = os.environ.get("TF_GRAFANA_URL", "http://localhost:3000")
     prometheus = os.environ.get("TF_PROMETHEUS_URL", "http://localhost:9090")

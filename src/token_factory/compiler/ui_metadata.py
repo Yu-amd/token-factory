@@ -44,11 +44,11 @@ def compile_ui_metadata(
         "routes": routes,
         "endpoints": endpoints.get("endpoints", []),
         "links": {
-            "gateway": "http://localhost:8080",
-            "semantic_router_api": "http://localhost:8081",
-            "semantic_router_dashboard": "http://localhost:8700",
-            "grafana": "http://localhost:3000",
-            "prometheus": "http://localhost:9090",
+            "gateway": "http://127.0.0.1:18080",
+            "semantic_router_api": "http://127.0.0.1:8081",
+            "semantic_router_dashboard": "http://127.0.0.1:8700",
+            "grafana": "http://127.0.0.1:3000",
+            "prometheus": "http://127.0.0.1:9090",
         },
         "pinned_versions": PINNED_VERSIONS,
     }

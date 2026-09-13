@@ -61,14 +61,14 @@ make compile
 ```bash
 make install                 # full modular install
 make verify
-make ports                   # 8080 gateway, 8081 SR API, 8700 dashboard, 3000/9090
+make ports                   # 18080 gateway, 8081 SR API, 8700 dashboard, 3000/9090
 make ui                      # Streamlit on :8501
 ```
 
 ### Test routing
 
 ```bash
-curl -s http://localhost:8080/v1/chat/completions \
+curl -s http://127.0.0.1:18080/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{"model":"token-factory/auto","messages":[{"role":"user","content":"Write quicksort in Rust"}]}'
 ```
