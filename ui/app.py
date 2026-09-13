@@ -15,6 +15,10 @@ ROOT = Path(__file__).resolve().parents[1]
 META_PATH = ROOT / "generated" / "ui-metadata.json"
 GATEWAY = os.environ.get("TF_GATEWAY_URL", "http://127.0.0.1:18080")
 VIRTUAL_MODEL = os.environ.get("TF_VIRTUAL_MODEL", "token-factory/auto")
+# Generous default so architecture / coding prompts are not truncated mid-answer.
+MAX_TOKENS = int(os.environ.get("TF_MAX_TOKENS", "4096"))
+CHAT_TIMEOUT = float(os.environ.get("TF_CHAT_TIMEOUT", "300"))
+
 
 st.set_page_config(
     page_title="AMD Token Factory",
@@ -479,10 +483,10 @@ def stream_chat_completion(
         json={
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 512,
+            "max_tokens": MAX_TOKENS,
             "stream": True,
         },
-        timeout=120.0,
+        timeout=CHAT_TIMEOUT,
     ) as response:
         if response.status_code >= 400:
             body = response.read().decode("utf-8", errors="replace")[:500]
@@ -527,9 +531,9 @@ def chat_completion(prompt: str, model: str) -> dict[str, Any]:
         json={
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 512,
+            "max_tokens": MAX_TOKENS,
         },
-        timeout=120.0,
+        timeout=CHAT_TIMEOUT,
     )
     if r.status_code >= 400:
         raise RuntimeError(f"HTTP {r.status_code}: {r.text[:500]}")
