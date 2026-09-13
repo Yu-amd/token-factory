@@ -15,10 +15,19 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 META_PATH = ROOT / "generated" / "ui-metadata.json"
 GATEWAY = os.environ.get("TF_GATEWAY_URL", "http://127.0.0.1:18080")
+SR_API = os.environ.get("TF_SR_API_URL", "http://127.0.0.1:8081")
 VIRTUAL_MODEL = os.environ.get("TF_VIRTUAL_MODEL", "token-factory/auto")
 # Generous default so architecture / coding prompts are not truncated mid-answer.
 MAX_TOKENS = int(os.environ.get("TF_MAX_TOKENS", "4096"))
 CHAT_TIMEOUT = float(os.environ.get("TF_CHAT_TIMEOUT", "300"))
+# WHY: AIGW buffers SSE until complete (TTFT ≈ full generation). Playground
+# classifies via SR API then streams directly from the AIM endpoint for live TTFT.
+# Set TF_PLAYGROUND_DIRECT_STREAM=0 to force gateway path.
+DIRECT_STREAM = os.environ.get("TF_PLAYGROUND_DIRECT_STREAM", "1").lower() not in (
+    "0",
+    "false",
+    "no",
+)
 
 
 st.set_page_config(
@@ -471,18 +480,121 @@ def section(
     )
 
 
-def stream_chat_completion(
+def classify_intent(prompt: str, sr_api: str) -> dict[str, Any]:
+    """Call Semantic Router classification API (~100ms)."""
+    r = httpx.post(
+        f"{sr_api.rstrip('/')}/api/v1/classify/intent",
+        json={"text": prompt},
+        timeout=15.0,
+    )
+    if r.status_code >= 400:
+        raise RuntimeError(f"classify HTTP {r.status_code}: {r.text[:300]}")
+    return r.json()
+
+
+def resolve_aim_target(
+    ui_meta: dict[str, Any], classify: dict[str, Any]
+) -> tuple[str, str, str]:
+    """Map classify result → (chat_url, model_id, route_name)."""
+    decision = (
+        classify.get("routing_decision")
+        or (classify.get("classification") or {}).get("category")
+        or ""
+    )
+    recommended = classify.get("recommended_model") or ""
+    routes = ui_meta.get("routes") or []
+
+    matched = None
+    for route in routes:
+        if route.get("name") == decision:
+            matched = route
+            break
+    if matched is None and recommended:
+        for route in routes:
+            ep = route.get("endpoint") or {}
+            if route.get("lora_name") == recommended or ep.get("model") == recommended:
+                matched = route
+                break
+    if matched is None and routes:
+        matched = routes[-1]
+
+    if not matched:
+        raise RuntimeError("No routes in ui-metadata to resolve AIM target")
+
+    ep = matched.get("endpoint") or {}
+    host = ep.get("host")
+    port = ep.get("port", 8000)
+    model_id = recommended or matched.get("lora_name") or ep.get("model")
+    if not host or not model_id:
+        raise RuntimeError(f"Incomplete endpoint for route {matched.get('name')}")
+    url = f"http://{host}:{port}/v1/chat/completions"
+    return url, str(model_id), str(matched.get("name") or decision or "route")
+
+
+def _iter_sse_text(response: httpx.Response, meta: dict[str, Any]) -> Iterator[str]:
+    for line in response.iter_lines():
+        if not line:
+            continue
+        if line.startswith("data:"):
+            payload = line[5:].strip()
+        elif line.startswith("{"):
+            payload = line.strip()
+        else:
+            continue
+        if payload == "[DONE]":
+            break
+        try:
+            chunk = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if chunk.get("model"):
+            meta["model"] = chunk["model"]
+        choice = (chunk.get("choices") or [{}])[0]
+        if choice.get("finish_reason"):
+            meta["finish"] = choice["finish_reason"]
+        delta = choice.get("delta") or {}
+        text = delta.get("content") or delta.get("reasoning") or ""
+        if not text:
+            continue
+        if delta.get("content"):
+            meta["saw_content"] = True
+        elif delta.get("reasoning"):
+            meta["saw_reasoning"] = True
+        yield text
+
+
+def stream_from_aim(
+    prompt: str,
+    chat_url: str,
+    model_id: str,
+    meta: dict[str, Any],
+) -> Iterator[str]:
+    """True progressive SSE from an OpenAI-compatible AIM endpoint."""
+    meta["stream_path"] = "direct-aim"
+    with httpx.stream(
+        "POST",
+        chat_url,
+        json={
+            "model": model_id,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": MAX_TOKENS,
+            "stream": True,
+        },
+        timeout=CHAT_TIMEOUT,
+    ) as response:
+        if response.status_code >= 400:
+            body = response.read().decode("utf-8", errors="replace")[:500]
+            raise RuntimeError(f"AIM HTTP {response.status_code}: {body}")
+        yield from _iter_sse_text(response, meta)
+
+
+def stream_via_gateway(
     prompt: str,
     model: str,
     meta: dict[str, Any],
 ) -> Iterator[str]:
-    """Yield SSE text deltas from the gateway; update meta with model/finish.
-
-    Note: Envoy AI Gateway currently delivers the full SSE body in one burst
-    (content-type is event-stream, but bytes are buffered until upstream
-    completes). We still use stream=true and pace UI yields so the Playground
-    shows progressive output instead of a long blank wait then a dump.
-    """
+    """Gateway path — often buffered until generation completes (slow TTFT)."""
+    meta["stream_path"] = "gateway"
     with httpx.stream(
         "POST",
         f"{GATEWAY}/v1/chat/completions",
@@ -500,49 +612,40 @@ def stream_chat_completion(
             raise RuntimeError(f"HTTP {response.status_code}: {body}")
 
         last_arrive = time.perf_counter()
-        burst_chunks = 0
-        for line in response.iter_lines():
-            if not line:
-                continue
-            if line.startswith("data:"):
-                payload = line[5:].strip()
-            elif line.startswith("{"):
-                payload = line.strip()
-            else:
-                continue
-            if payload == "[DONE]":
-                break
-            try:
-                chunk = json.loads(payload)
-            except json.JSONDecodeError:
-                continue
-            if chunk.get("model"):
-                meta["model"] = chunk["model"]
-            choice = (chunk.get("choices") or [{}])[0]
-            if choice.get("finish_reason"):
-                meta["finish"] = choice["finish_reason"]
-            delta = choice.get("delta") or {}
-            # Prefer visible content; fall back to reasoning so gpt-oss streams live.
-            text = delta.get("content") or delta.get("reasoning") or ""
-            if not text:
-                continue
-            if delta.get("content"):
-                meta["saw_content"] = True
-            elif delta.get("reasoning"):
-                meta["saw_reasoning"] = True
-
+        for text in _iter_sse_text(response, meta):
             now = time.perf_counter()
             gap = now - last_arrive
             last_arrive = now
-            # Gateway-buffered burst: chunks arrive <5ms apart. Pace display
-            # (~50–80 chars/sec) so the reply types out instead of appearing at once.
             if gap < 0.005:
-                burst_chunks += 1
                 meta["gateway_buffered"] = True
                 time.sleep(min(0.028, 0.008 + len(text) * 0.003))
-            else:
-                burst_chunks = 0
             yield text
+
+
+def stream_chat_completion(
+    prompt: str,
+    model: str,
+    meta: dict[str, Any],
+    ui_meta: dict[str, Any],
+    sr_api: str,
+) -> Iterator[str]:
+    """Prefer SR classify → direct AIM stream (live TTFT); fall back to gateway."""
+    if DIRECT_STREAM:
+        try:
+            t0 = time.perf_counter()
+            classified = classify_intent(prompt, sr_api)
+            chat_url, model_id, route = resolve_aim_target(ui_meta, classified)
+            meta["route"] = route
+            meta["classify_ms"] = int((time.perf_counter() - t0) * 1000)
+            meta["aim_url"] = chat_url
+            conf = (classified.get("classification") or {}).get("confidence")
+            if conf is not None:
+                meta["confidence"] = conf
+            yield from stream_from_aim(prompt, chat_url, model_id, meta)
+            return
+        except Exception as exc:
+            meta["direct_error"] = str(exc)[:200]
+    yield from stream_via_gateway(prompt, model, meta)
 
 
 def chat_completion(prompt: str, model: str) -> dict[str, Any]:
@@ -594,15 +697,16 @@ tab_chat, tab_route, tab_arch, tab_inv, tab_pol, tab_ops = st.tabs(
 )
 
 with tab_chat:
+    sr_api = links.get("semantic_router_api") or SR_API
     section(
         "Playground",
-        "Chat through the gateway",
-        "Send a prompt to the virtual model. Replies stream live through Envoy AI Gateway → "
-        "Semantic Router → AIM backends on Instinct / EPYC / Radeon.",
+        "Chat with live streaming",
+        "Semantic Router classifies the prompt, then tokens stream directly from the "
+        "selected AIM backend (bypasses gateway SSE buffering for fast TTFT).",
         hero=True,
         meta=[
             ("Virtual model", VIRTUAL_MODEL),
-            ("Gateway", GATEWAY),
+            ("Classify API", sr_api),
         ],
     )
 
@@ -626,19 +730,23 @@ with tab_chat:
                 "gateway_buffered": False,
             }
             wait = st.empty()
-            wait.caption("Routing & waiting for first token…")
+            wait.caption("Classifying intent…")
             try:
-                def _paced() -> Iterator[str]:
+                def _stream() -> Iterator[str]:
                     first = True
                     for piece in stream_chat_completion(
-                        prompt, VIRTUAL_MODEL, stream_meta
+                        prompt,
+                        VIRTUAL_MODEL,
+                        stream_meta,
+                        meta,
+                        sr_api,
                     ):
                         if first:
                             wait.empty()
                             first = False
                         yield piece
 
-                reply = st.write_stream(_paced())
+                reply = st.write_stream(_stream())
                 if not (reply or "").strip():
                     wait.empty()
                     body = chat_completion(prompt, VIRTUAL_MODEL)
@@ -655,11 +763,15 @@ with tab_chat:
                     if stream_meta.get("saw_reasoning")
                     else "stream"
                 )
-                mode = (
-                    "paced (gateway-buffered SSE)"
-                    if stream_meta.get("gateway_buffered")
-                    else "live SSE"
-                )
+                if stream_meta.get("stream_path") == "direct-aim":
+                    mode = (
+                        f"live AIM · route={stream_meta.get('route')} · "
+                        f"classify={stream_meta.get('classify_ms')}ms"
+                    )
+                elif stream_meta.get("gateway_buffered"):
+                    mode = "paced (gateway-buffered SSE)"
+                else:
+                    mode = "gateway SSE"
                 meta_line = (
                     f"routed model={stream_meta.get('model') or '—'} · "
                     f"finish={stream_meta.get('finish') or '—'} · {kind} · {mode}"
@@ -670,7 +782,7 @@ with tab_chat:
                 )
             except Exception as exc:
                 wait.empty()
-                err = f"{exc} — is the gateway up? Run: `token-factory ports start`"
+                err = f"{exc} — check SR API (:8081) and AIM endpoints; or run token-factory ports start"
                 st.error(err)
                 st.session_state.messages.append(
                     {"role": "assistant", "content": err}

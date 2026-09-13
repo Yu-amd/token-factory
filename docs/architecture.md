@@ -36,10 +36,11 @@ Clients call one virtual model: **`token-factory/auto`**.
 
 ### Streaming caveat
 
-OpenAI `stream: true` returns `text/event-stream`, but with Envoy AI Gateway v0.4.0
-(ext_proc `response_body_mode: BUFFERED` + dual SR extproc) the gateway typically
-**buffers the full SSE body** and delivers it in one burst. Direct AIM backends
-stream progressively; Token Factory UI paces burst tokens for a typing UX until
-true live SSE through AIGW is available.
+OpenAI `stream: true` through Envoy AI Gateway v0.4.0 typically **buffers the full
+SSE body** (TTFT ≈ full generation). The Playground avoids that by classifying via
+the Semantic Router API (`/api/v1/classify/intent`) and streaming **directly from the
+selected AIM endpoint** for live TTFT. Set `TF_PLAYGROUND_DIRECT_STREAM=0` to force
+the gateway path. Gateway streaming remains a V2 fix when AIGW ModeOverride works
+with dual SR extproc.
 
 See [routing-policy.md](routing-policy.md) and [eai-sr-demo-parity.md](eai-sr-demo-parity.md).
