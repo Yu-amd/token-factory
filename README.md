@@ -38,7 +38,7 @@ COMPILED ROUTES        = ACTIVE EXECUTION (profile overlays → SR / AIGW)
 
 Use cases, compute metadata, model capabilities, and a relative (non-fabricated) cost model live under `catalog/`. Rankings are produced by `RecommendationEngine` and surfaced in:
 
-- UI tabs **AMD Routing Matrix** and **Policies** (`make ui`)
+- UI **AMD Routing Matrix** (`make ui`) — controls → cards → legend → grid (no intro hero); **Policies** tab for canonical policy depth
 - CLI: `token-factory recommend --use-case coding-assistant --objective balanced`
 - CLI: `token-factory policy show|explain|coverage|validate`
 - Makefile: `make recommend`

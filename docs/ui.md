@@ -33,7 +33,9 @@ Implementation: `ui/views/policies.py`.
 
 ## AMD Routing Matrix tab
 
-Opinionated SHOULD-RUN rankings (no fabricated $/token). Key UI cues:
+Opinionated SHOULD-RUN rankings (no fabricated $/token). The tab **opens at the controls**
+(no intro hero / policy meta chips). Policy depth lives on the **Policies** tab
+([policy-model.md](policy-model.md)). Key UI cues:
 
 - **Controls** — Use Case, Objective, Deployment, Lifecycle, Serving Pattern, Traffic, Data Locality, Show, I Have Compute
 - **Summary cards** — distinct selectors: Best Performance / Best Balance / Lowest-Cost Sufficient (plus Best Batch / Best Local when relevant)

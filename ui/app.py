@@ -813,22 +813,6 @@ with tab_matrix:
         sys.path.insert(0, str(ROOT / "src"))
     from token_factory.routing_matrix import RecommendationEngine
 
-    section(
-        "AMD Opinionated Routing",
-        "What SHOULD run where",
-        "AIM support (can run) stays in catalog/aims.yaml. Tech Preview (MI350P) and "
-        "Radeon Preview are lifecycle-gated — never silent production GA. Matrix cells "
-        "with an eval superscript are available via private eval containers. Summary cards "
-        "use distinct selectors (Performance / Balance / Lowest-Cost Sufficient). "
-        "Cost language: Infrastructure Cost Class · Token Economic Fit · Cost Evidence "
-        "(RELATIVE until measured). No fabricated $/token.",
-        hero=True,
-        meta=[
-            ("Policy", f"amd-routing-policy v{(meta.get('routing_matrix') or {}).get('policy_version') or '2.3'}"),
-            ("Cost evidence", "RELATIVE (no fabricated $/token)"),
-        ],
-    )
-
     try:
         engine = RecommendationEngine()
         uc_opts = {u["display_name"]: u["id"] for u in engine.list_use_cases()}

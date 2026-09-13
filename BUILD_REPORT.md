@@ -248,7 +248,7 @@ Shipped as an additive layer on V1 (no gateway rebuild):
 - Catalogs: `compute.yaml`, `use-cases.yaml`, `models.yaml`, `cost-model.yaml`, `amd-routing-policy.yaml` (`aims.yaml` remains authoritative for GA CAN RUN)
 - Extensions: `aims-tech-preview.yaml` (MI350P TP), `model-aliases.yaml`, lifecycle modes, **Lowest-Cost Sufficient**, Radeon Preview lifecycle=`preview`
 - Engine + CLI: `token_factory.routing_matrix` / `token-factory recommend --lifecycle …` / `make recommend`
-- UI: **AMD Routing Matrix** — MI350P column, lifecycle selector, Serving Pattern, distinct Best Performance / Balance / Lowest-Cost Sufficient cards; mark legend + private-eval note **above** the table; Preview/TP cells tagged `eval` (visible under Production, not blank)
+- UI: **AMD Routing Matrix** opens at controls (no hero); MI350P column, lifecycle selector, Serving Pattern, distinct Best Performance / Balance / Lowest-Cost Sufficient cards; mark legend + private-eval note **above** the table; Preview/TP cells tagged `eval` (visible under Production, not blank). **Policies** tab is the deep canonical-policy surface (v2.3).
 - Docs: [docs/amd-routing-matrix.md](docs/amd-routing-matrix.md), [docs/routing-economics.md](docs/routing-economics.md), [docs/ui.md](docs/ui.md)
 - Compile embeds light `routing_matrix` metadata in `ui-metadata.json` (objective alias only)
 

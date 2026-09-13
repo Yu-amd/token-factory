@@ -188,7 +188,9 @@ token-factory recommend -u coding-assistant --simulate -L production
 
 ## UI
 
-Streamlit tab **AMD Routing Matrix** (`make ui` → tab):
+Streamlit tab **AMD Routing Matrix** (`make ui` → tab) **starts at the controls**
+(no Matrix hero blurb). Deep policy narrative is on the **Policies** tab
+([policy-model.md](policy-model.md) / `policies/amd-policy.yaml` v2.3).
 
 - Controls: Use Case, Objective, Deployment, Lifecycle, Serving Pattern, Traffic, Data Locality, Show, I Have Compute
 - Summary cards: distinct selectors — **BEST PERFORMANCE** | **BEST BALANCE** | **LOWEST-COST SUFFICIENT** (+ **BEST BATCH** / **BEST LOCAL** when relevant)
