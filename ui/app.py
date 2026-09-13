@@ -245,21 +245,40 @@ CSS = textwrap.dedent(
       color: var(--tf-green-hi) !important;
     }
 
-    div[data-testid="stTabs"] button[data-baseweb="tab"] {
+    /* Streamlit 1.63+ tabs are div[role=tab], not baseweb buttons */
+    [data-testid="stTabs"] [role="tablist"],
+    div[role="tablist"] {
+      display: flex !important;
+      flex-wrap: wrap !important;
+      align-items: center !important;
+      gap: 0.85rem 1.35rem !important;
+      column-gap: 1.35rem !important;
+      row-gap: 0.75rem !important;
+      border-bottom: 1px solid var(--tf-border) !important;
+      padding: 0.15rem 0 1rem 0 !important;
+      margin-bottom: 1.35rem !important;
+    }
+    [data-testid="stTabs"] [role="tab"],
+    div[role="tablist"] [role="tab"] {
       font-family: "IBM Plex Sans", sans-serif !important;
-      font-weight: 500 !important; color: var(--tf-muted) !important;
-      background: transparent !important; border-radius: 999px !important;
-      padding: 0.5rem 1.05rem !important;
-      margin-right: 0.2rem !important;
+      font-weight: 500 !important;
+      font-size: 0.95rem !important;
+      color: var(--tf-muted) !important;
+      background: transparent !important;
+      border-radius: 999px !important;
+      padding: 0.55rem 1.15rem !important;
+      margin: 0 !important;
+      letter-spacing: 0.015em !important;
+      line-height: 1.35 !important;
     }
-    div[data-testid="stTabs"] button[aria-selected="true"] {
-      color: var(--tf-green-hi) !important; background: var(--tf-green-dim) !important;
+    [data-testid="stTabs"] [role="tab"][aria-selected="true"],
+    div[role="tablist"] [role="tab"][aria-selected="true"] {
+      color: var(--tf-green-hi) !important;
+      background: var(--tf-green-dim) !important;
     }
-    div[data-testid="stTabs"] [data-baseweb="tab-highlight"],
-    div[data-testid="stTabs"] [data-baseweb="tab-border"] { display: none !important; }
-    div[data-testid="stTabs"] [role="tablist"] {
-      gap: 0.35rem; border-bottom: 1px solid var(--tf-border) !important;
-      padding-bottom: 0.65rem; margin-bottom: 1.15rem;
+    [data-testid="stTabs"] [data-baseweb="tab-highlight"],
+    [data-testid="stTabs"] [data-baseweb="tab-border"] {
+      display: none !important;
     }
 
     .stTextArea textarea, .stTextInput input,
