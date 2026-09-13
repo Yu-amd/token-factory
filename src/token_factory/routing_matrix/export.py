@@ -24,8 +24,6 @@ from token_factory.routing_matrix.executive import (
     ANTI_BENCHMARK,
     DEFAULT_TOP_N,
     build_executive_slide,
-    executive_csv_bytes,
-    render_executive_png,
 )
 from token_factory.routing_matrix.projection import (
     MatrixProjection,
@@ -33,6 +31,19 @@ from token_factory.routing_matrix.projection import (
     get_current_matrix_projection,
     status_legend_names,
 )
+
+
+def _executive_csv_bytes(model: Any) -> bytes:
+    """Lazy import so Streamlit hot-reload cannot bind a stale CSV writer."""
+    from token_factory.routing_matrix.executive import executive_csv_bytes
+
+    return executive_csv_bytes(model)
+
+
+def _render_executive_png(model: Any, **kwargs: Any) -> bytes:
+    from token_factory.routing_matrix.executive import render_executive_png
+
+    return render_executive_png(model, **kwargs)
 
 FormatName = Literal["png", "csv", "zip", "svg"]
 StyleName = Literal["executive", "full", "slide"]
@@ -362,7 +373,7 @@ def render_matrix_png(
             timestamp=ts,
             inventory_provided=inventory_provided,
         )
-        return render_executive_png(model)
+        return _render_executive_png(model)
     return render_full_matrix_png(projection, timestamp=ts)
 
 
@@ -468,7 +479,7 @@ def _csv_for_style(
             timestamp=timestamp,
             inventory_provided=inventory_provided,
         )
-        return executive_csv_bytes(model)
+        return _executive_csv_bytes(model)
     return projection_to_csv(projection, include_use_case=include_use_case)
 
 
@@ -729,7 +740,7 @@ def export_all_use_cases(
             fields: list[str] = []
             for proj in projections:
                 model = build_executive_slide(proj, top_n=top_n, timestamp=ts)
-                text = executive_csv_bytes(model).decode("utf-8")
+                text = _executive_csv_bytes(model).decode("utf-8")
                 reader = csv.DictReader(io.StringIO(text))
                 fields = list(reader.fieldnames or fields)
                 all_rows.extend(list(reader))
@@ -799,7 +810,7 @@ def export_all_use_cases(
                 csv_path = f"{uc}/matrix.csv"
             slide = build_executive_slide(proj, top_n=top_n, timestamp=ts)
             csv_data = (
-                executive_csv_bytes(slide)
+                _executive_csv_bytes(slide)
                 if style_key == "executive"
                 else projection_to_csv(proj, include_use_case=True)
             )

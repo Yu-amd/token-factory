@@ -356,23 +356,23 @@ def build_executive_slide(
 def executive_csv_bytes(model: ExecutiveSlideModel) -> bytes:
     """Companion CSV: exact top-N rows shown on the slide."""
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=list(EXECUTIVE_CSV_FIELDS))
+    fields = list(EXECUTIVE_CSV_FIELDS)
+    writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
     writer.writeheader()
     for row in model.alternatives:
-        writer.writerow(
-            {
-                "rank": row.rank if row.rank is not None else "",
-                "recommendation": row.recommendation,
-                "model": row.model,
-                "model_label": row.model_label,
-                "compute": row.compute,
-                "lifecycle": row.lifecycle,
-                "confidence": row.confidence,
-                "use_case": model.use_case_id,
-                "evidence_badge": row.evidence_badge,
-                "performance_evidence_status": row.performance_evidence_status,
-            }
-        )
+        payload = {
+            "rank": row.rank if row.rank is not None else "",
+            "recommendation": row.recommendation,
+            "model": row.model,
+            "model_label": row.model_label,
+            "compute": row.compute,
+            "lifecycle": row.lifecycle,
+            "confidence": row.confidence,
+            "use_case": model.use_case_id,
+            "evidence_badge": row.evidence_badge,
+            "performance_evidence_status": row.performance_evidence_status,
+        }
+        writer.writerow({k: payload.get(k, "") for k in fields})
     return buf.getvalue().encode("utf-8")
 
 
