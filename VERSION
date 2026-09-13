@@ -1,0 +1,10 @@
+0.1.0
+
+# Pinned component matrix (see README for details)
+# semantic-router-chart: 0.3.0 (appVersion v0.3.0)
+# semantic-router-app: v0.3.0
+# envoy-ai-gateway: v0.3.0
+# envoy-gateway: v1.2.3
+# prometheus: v2.55.1
+# grafana: 11.4.0
+# python: >=3.11

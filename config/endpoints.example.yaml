@@ -1,0 +1,40 @@
+version: "1"
+endpoints:
+  - id: gpt-oss-120b-coding
+    host: 129.212.183.201
+    port: 8000
+    model: openai/gpt-oss-120b
+    role: coding
+    hardware: instinct
+    accelerator: MI350X
+    aim_support: optimized
+    weight: 1
+    enabled: true
+    tags: [coding, reasoning, flagship]
+    description: GPT-OSS 120B FP8 on MI350X for coding and software engineering
+
+  - id: gpt-oss-20b-general
+    host: 165.245.136.245
+    port: 8000
+    model: openai/gpt-oss-20b
+    role: general
+    hardware: instinct
+    accelerator: MI300X
+    aim_support: optimized
+    weight: 1
+    enabled: true
+    tags: [general, fast]
+    description: GPT-OSS 20B FP8 on MI300X for general knowledge queries
+
+  - id: mock-reasoning
+    host: token-factory-mock-reasoning.token-factory.svc.cluster.local
+    port: 8000
+    model: mock/reasoning-v1
+    role: reasoning
+    hardware: instinct
+    accelerator: MI300X
+    aim_support: preview
+    weight: 0.5
+    enabled: false
+    tags: [mock, test]
+    description: In-cluster mock backend for CI and kind demos

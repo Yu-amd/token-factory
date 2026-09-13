@@ -1,0 +1,33 @@
+version: "1"
+virtual_model: token-factory/auto
+
+cluster:
+  gateway_name: semantic-router
+  gateway_namespace: token-factory
+  namespaces:
+    token_factory: token-factory
+    envoy_gateway: envoy-gateway-system
+    envoy_ai_gateway: envoy-ai-gateway-system
+    semantic_router: vllm-semantic-router-system
+    observability: observability
+
+paths:
+  endpoints: config/endpoints.yaml
+  policies: config/policies.yaml
+  catalog: catalog/aims.yaml
+  output_dir: generated
+
+components:
+  semantic_router:
+    chart_version: "0.3.0"
+    app_version: v0.3.0
+    dashboard:
+      enabled: true
+      port: 8700
+  envoy_ai_gateway:
+    version: v0.3.0
+  envoy_gateway:
+    version: v1.2.3
+  observability:
+    prometheus: v2.55.1
+    grafana: "11.4.0"

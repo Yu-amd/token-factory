@@ -1,0 +1,8 @@
+# Example recording rules for Token Factory dashboards (apply separately if using Prometheus Operator)
+groups:
+  - name: token_factory
+    rules:
+      - record: token_factory:envoy_downstream_rps
+        expr: sum(rate(envoy_http_downstream_rq_total[5m]))
+      - record: token_factory:envoy_upstream_p95_ms
+        expr: histogram_quantile(0.95, sum(rate(envoy_cluster_upstream_rq_time_bucket[5m])) by (le))

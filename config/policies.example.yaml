@@ -1,0 +1,56 @@
+version: "1"
+policy:
+  name: amd-balanced
+  description: Balanced routing across coding and general endpoints
+  virtual_model: token-factory/auto
+  priority_mode: balanced
+  fallback:
+    enabled: true
+    chain:
+      - gpt-oss-20b-general
+      - gpt-oss-120b-coding
+  routes:
+    - name: coding_route
+      description: Computer science and coding queries
+      priority: 10
+      domains:
+        - computer science
+      endpoint_ref: gpt-oss-120b-coding
+      lora_name: coding-expert
+      use_reasoning: false
+      model_card: coding-model
+
+    - name: general_route
+      description: General knowledge and business queries
+      priority: 1
+      domains:
+        - business
+        - history
+        - economics
+        - law
+        - philosophy
+        - psychology
+        - other
+      endpoint_ref: gpt-oss-20b-general
+      lora_name: general-expert
+      use_reasoning: false
+      model_card: fast-model
+
+  signals:
+    domains:
+      - name: computer science
+        description: Software engineering, algorithms, AI/ML, coding
+      - name: business
+        description: Business, management, marketing
+      - name: history
+        description: Historical topics
+      - name: economics
+        description: Economics and finance
+      - name: law
+        description: Legal topics
+      - name: philosophy
+        description: Philosophy and ethics
+      - name: psychology
+        description: Psychology and cognitive science
+      - name: other
+        description: Topics outside defined domains

@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: token-factory
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-backend-coding
+  namespace: token-factory
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-backend-coding
+  template:
+    metadata:
+      labels:
+        app: mock-backend-coding
+    spec:
+      containers:
+        - name: mock
+          image: python:3.11-slim
+          command: ["sh", "-c", "pip install fastapi uvicorn -q && python /app/server.py"]
+          env:
+            - name: MOCK_ROLE
+              value: coding
+            - name: MOCK_MODEL
+              value: mock/coding-v1
+          ports:
+            - containerPort: 8000
+          volumeMounts:
+            - name: app
+              mountPath: /app
+      volumes:
+        - name: app
+          configMap:
+            name: mock-backend-server
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: token-factory-mock-coding
+  namespace: token-factory
+spec:
+  selector:
+    app: mock-backend-coding
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-backend-general
+  namespace: token-factory
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-backend-general
+  template:
+    metadata:
+      labels:
+        app: mock-backend-general
+    spec:
+      containers:
+        - name: mock
+          image: python:3.11-slim
+          command: ["sh", "-c", "pip install fastapi uvicorn -q && python /app/server.py"]
+          env:
+            - name: MOCK_ROLE
+              value: general
+            - name: MOCK_MODEL
+              value: mock/general-v1
+          ports:
+            - containerPort: 8000
+          volumeMounts:
+            - name: app
+              mountPath: /app
+      volumes:
+        - name: app
+          configMap:
+            name: mock-backend-server
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: token-factory-mock-general
+  namespace: token-factory
+spec:
+  selector:
+    app: mock-backend-general
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-backend-reasoning
+  namespace: token-factory
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-backend-reasoning
+  template:
+    metadata:
+      labels:
+        app: mock-backend-reasoning
+    spec:
+      containers:
+        - name: mock
+          image: python:3.11-slim
+          command: ["sh", "-c", "pip install fastapi uvicorn -q && python /app/server.py"]
+          env:
+            - name: MOCK_ROLE
+              value: reasoning
+          ports:
+            - containerPort: 8000
+          volumeMounts:
+            - name: app
+              mountPath: /app
+      volumes:
+        - name: app
+          configMap:
+            name: mock-backend-server

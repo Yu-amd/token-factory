@@ -1,0 +1,22 @@
+version: "1"
+policy:
+  name: amd-cost-efficient
+  description: Route to smaller/faster models unless coding intent detected
+  virtual_model: token-factory/auto
+  priority_mode: cost
+  fallback:
+    enabled: true
+    chain: [gpt-oss-20b-general]
+  routes:
+    - name: coding_route
+      priority: 10
+      domains: [computer science]
+      endpoint_ref: gpt-oss-120b-coding
+      lora_name: coding-expert
+      model_card: coding-model
+    - name: general_route
+      priority: 1
+      domains: [business, history, economics, law, philosophy, psychology, other]
+      endpoint_ref: gpt-oss-20b-general
+      lora_name: general-expert
+      model_card: fast-model
