@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "token-factory"
 version = "0.1.0"
-description = "AMD Token Factory reference architecture — config-driven semantic routing scaffold"
+description = "Token Factory reference architecture — config-driven semantic routing scaffold"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"

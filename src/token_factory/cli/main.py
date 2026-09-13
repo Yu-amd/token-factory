@@ -39,7 +39,7 @@ from token_factory.runtime.port_forward import (
 )
 from token_factory.version import PINNED_VERSIONS, VIRTUAL_MODEL
 
-app = typer.Typer(name="token-factory", help="AMD Token Factory reference architecture CLI")
+app = typer.Typer(name="token-factory", help="Token Factory reference architecture CLI")
 policy_app = typer.Typer(help="AMD Canonical Routing Policy commands")
 demo_app = typer.Typer(
     help="Automated Demo — routing-policy & observability validation (not a benchmark)"
@@ -618,7 +618,7 @@ def recommend(
         console.print_json(data=result)
         return
 
-    title = "AMD TOKEN FACTORY RECOMMENDATION" + (" (SIMULATE)" if simulate else "")
+    title = "TOKEN FACTORY RECOMMENDATION" + (" (SIMULATE)" if simulate else "")
     console.print(
         Panel.fit(
             f"[bold]{title}[/bold]\n"

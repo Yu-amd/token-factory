@@ -34,7 +34,7 @@ DIRECT_STREAM = os.environ.get("TF_PLAYGROUND_DIRECT_STREAM", "1").lower() not i
 
 
 st.set_page_config(
-    page_title="AMD Token Factory",
+    page_title="Token Factory",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -426,7 +426,7 @@ def render_chrome(virtual_model: str) -> None:
               </svg>
             </div>
             <div class="tf-brand-text">
-              <h1>AMD Token Factory</h1>
+              <h1>Token Factory</h1>
               <p>Semantic routing · Instinct · EPYC · Radeon</p>
             </div>
           </div>

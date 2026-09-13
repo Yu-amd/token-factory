@@ -1,4 +1,4 @@
-# AMD Token Factory
+# Token Factory
 
 Reference architecture for **config-driven Mixture-of-Models (MoM)** inference on AMD compute (Instinct, EPYC, Radeon) using [vLLM Semantic Router v0.3](https://github.com/vllm-project/semantic-router) and [Envoy AI Gateway v0.4.0](https://github.com/envoyproxy/ai-gateway).
 

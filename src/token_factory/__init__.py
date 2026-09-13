@@ -1,4 +1,4 @@
-"""AMD Token Factory reference architecture."""
+"""Token Factory reference architecture."""
 
 from token_factory.version import __version__
 
