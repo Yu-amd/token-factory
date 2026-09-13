@@ -13,11 +13,14 @@ make ui       # http://localhost:8501  (runs from ui/ so .streamlit/config.toml 
 | Tab | Purpose |
 |-----|---------|
 | **Playground** | Chat with live token streaming |
+| **AMD Routing Matrix** | Opinionated SHOULD-RUN rankings (Instinct / EPYC / Radeon) + live overlay |
 | **Routing** | Compiled domain → AIM routes |
 | **Architecture** | Control-path diagram |
 | **Endpoints** | Endpoint inventory from compile |
 | **Policies** | Active policy pack |
 | **Operations** | Links to SR Dashboard / Grafana / Prometheus |
+
+See [amd-routing-matrix.md](amd-routing-matrix.md) for CAN / SHOULD / CAN ROUTE NOW.
 
 ## Playground streaming (live TTFT)
 

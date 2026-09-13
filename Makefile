@@ -1,8 +1,10 @@
-.PHONY: help preflight install apply verify test demo status dashboard grafana logs reset uninstall update-aim-catalog compile ports ui smoke-ui lint
+.PHONY: help preflight install apply verify test demo status dashboard grafana logs reset uninstall update-aim-catalog compile ports ui smoke-ui recommend lint
 
 REPO_ROOT := $(shell pwd)
 VENV := $(REPO_ROOT)/.venv
 PY := $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
+USE_CASE ?= coding-assistant
+OBJECTIVE ?= balanced
 
 help:
 	@echo "Token Factory Makefile targets:"
@@ -16,8 +18,9 @@ help:
 	@echo "  status               CLI health checks"
 	@echo "  dashboard            Port-forward + verify SR dashboard"
 	@echo "  ports                Start tracked port-forwards (:18080 gateway, :8081 SR API, …)"
-	@echo "  ui                   Launch Streamlit UI (Playground: classify→AIM live stream)"
+	@echo "  ui                   Launch Streamlit UI (Playground + AMD Routing Matrix)"
 	@echo "  smoke-ui             Smoke-test Playground streaming path"
+	@echo "  recommend            AMD Opinionated Routing (USE_CASE=… OBJECTIVE=…)"
 	@echo "  logs                 Tail semantic-router logs"
 	@echo "  reset                Uninstall + delete generated/"
 	@echo "  uninstall            Uninstall Helm releases"
@@ -62,6 +65,9 @@ ui:
 
 smoke-ui:
 	bash scripts/smoke-playground-stream.sh
+
+recommend:
+	$(PY) -m token_factory.cli.main recommend --use-case $(USE_CASE) --objective $(OBJECTIVE)
 
 logs:
 	kubectl logs -n vllm-semantic-router-system deploy/semantic-router -f --tail=100

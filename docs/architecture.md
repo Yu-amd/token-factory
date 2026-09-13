@@ -26,6 +26,21 @@ config/endpoints.yaml + policies/*.yaml + catalog/aims.yaml
 
 Clients call one virtual model: **`token-factory/auto`**.
 
+## AMD Opinionated Routing (additive)
+
+Separate from the runtime gateway path: AIM catalog = **CAN RUN**, routing matrix =
+**SHOULD RUN**, endpoint inventory = **CAN ROUTE NOW**. See
+[amd-routing-matrix.md](amd-routing-matrix.md). Compile still emits V1 manifests plus
+light `routing_matrix` fields in `ui-metadata.json`.
+
+### AMD Compute Positioning
+
+- **EPYC** — CPU-centric / batch / low-QPS / fleet utilization — **not** a GPU interactive competitor; rises for batch/offline + relaxed latency; does not auto-rise for high-concurrency interactive.
+- **Radeon** — local / workstation / privacy; can win when capable + locality preferred.
+- **MI350P** — PCIe enterprise Instinct (Tech Preview); between workstation and rack.
+- **Instinct rack** — high-throughput / high-concurrency interactive and online-throughput.
+See [amd-routing-matrix.md](amd-routing-matrix.md).
+
 ## Request flow
 
 1. Client POST `/v1/chat/completions` with `model: token-factory/auto`

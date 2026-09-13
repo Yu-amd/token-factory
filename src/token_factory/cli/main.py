@@ -350,6 +350,169 @@ def catalog_update(
 
 
 @app.command()
+def recommend(
+    use_case: str | None = typer.Option(
+        None, "--use-case", "-u", help="Enterprise use-case id (e.g. coding-assistant)"
+    ),
+    objective: str | None = typer.Option(
+        None,
+        "--objective",
+        "-o",
+        help="balanced|token-cost|lowest-cost-sufficient|quality|latency|throughput|edge-local|enterprise",
+    ),
+    compute: str | None = typer.Option(
+        None, "--compute", "-c", help="Invert: recommend workloads for this accelerator/family"
+    ),
+    utilization: str = typer.Option("medium", help="low|medium|high"),
+    lifecycle: str = typer.Option(
+        "production",
+        "--lifecycle",
+        "-L",
+        help="production|production-preview|evaluation|all",
+    ),
+    serving_pattern: str | None = typer.Option(
+        None,
+        "--serving-pattern",
+        "-S",
+        help="interactive|online-throughput|batch|offline-batch",
+    ),
+    data_locality: bool = typer.Option(
+        False, "--data-locality", help="Prefer local/privacy-capable compute (Radeon)"
+    ),
+    simulate: bool = typer.Option(False, "--simulate", help="Show runtime selection vs inventory"),
+    json_out: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
+    list_use_cases: bool = typer.Option(False, "--list-use-cases", help="List use-case ids"),
+) -> None:
+    """AMD Opinionated Routing recommendations (SHOULD RUN + live inventory)."""
+    from token_factory.routing_matrix import RecommendationEngine
+
+    engine = RecommendationEngine()
+    if list_use_cases:
+        for uc in engine.list_use_cases():
+            console.print(f"{uc['id']:28} {uc.get('category',''):12} {uc['display_name']}")
+        return
+
+    endpoints = load_endpoints().get("endpoints", [])
+
+    if compute and not use_case:
+        result = engine.recommend_for_compute(
+            compute,
+            objective=objective or "balanced",
+            endpoints=endpoints,
+            lifecycle_mode=lifecycle,
+        )
+        if json_out:
+            console.print_json(data=result)
+            return
+        console.print(
+            Panel.fit(
+                f"[bold]Compute[/bold] {compute}\n[bold]Objective[/bold] {result['objective']}\n"
+                f"[bold]Lifecycle[/bold] {result.get('lifecycle_mode')}\n"
+                f"[dim]policy {result.get('policy_version')}[/dim]"
+            )
+        )
+        for block in result["use_cases"][:12]:
+            console.print(f"\n[cyan]{block['use_case']['display_name']}[/cyan] ({block['use_case']['id']})")
+            for row in block["top"]:
+                console.print(
+                    f"  {row.get('rank') or '-':>2}  {row['model']:<42} {row['compute']:<10} "
+                    f"{row['aim_support']:<10} {row.get('lifecycle',''):<12} {row['recommendation']}"
+                )
+        return
+
+    if not use_case:
+        console.print("[red]Provide --use-case or --compute (or --list-use-cases)[/red]")
+        raise typer.Exit(2)
+
+    if simulate:
+        result = engine.simulate_route(
+            use_case,
+            objective=objective,
+            utilization=utilization,
+            endpoints=endpoints,
+            lifecycle_mode=lifecycle,
+            data_locality=data_locality,
+            serving_pattern=serving_pattern,
+        )
+    else:
+        result = engine.recommend(
+            use_case,
+            objective=objective,
+            utilization=utilization,
+            endpoints=endpoints,
+            lifecycle_mode=lifecycle,
+            data_locality=data_locality,
+            serving_pattern=serving_pattern,
+        )
+
+    if json_out:
+        console.print_json(data=result)
+        return
+
+    title = "AMD TOKEN FACTORY RECOMMENDATION" + (" (SIMULATE)" if simulate else "")
+    console.print(
+        Panel.fit(
+            f"[bold]{title}[/bold]\n"
+            f"Use Case   {result['use_case']['display_name']} ({result['use_case']['id']})\n"
+            f"Objective  {result['objective']}\n"
+            f"Serving    {result.get('serving_pattern')} · latency {result.get('latency_requirement')}\n"
+            f"Lifecycle  {result.get('lifecycle_mode')} · allow {result.get('allowed_lifecycles')}\n"
+            f"Cost data  {result.get('cost_data', 'relative')} · evidence {result.get('cost_evidence_default', 'RELATIVE')} · policy {result.get('policy_version')}"
+        )
+    )
+    if result.get("locality_note"):
+        console.print(f"[yellow]{result['locality_note']}[/yellow]")
+
+    rows = result.get("amd_recommendation") if simulate else result.get("ranked") or result.get("candidates")
+    table = Table(title="Ranked candidates")
+    table.add_column("Rank")
+    table.add_column("Model")
+    table.add_column("Compute")
+    table.add_column("AIM")
+    table.add_column("Life")
+    table.add_column("Rec")
+    table.add_column("Live")
+    for row in (rows or [])[:15]:
+        table.add_row(
+            str(row.get("rank") or "—"),
+            row["model"],
+            row["compute"],
+            row.get("aim_support", ""),
+            row.get("lifecycle", ""),
+            row.get("recommendation", ""),
+            "yes" if row.get("endpoint_available") else "",
+        )
+    console.print(table)
+
+    if simulate:
+        sel = result.get("selected_runtime_route")
+        console.print(f"\n[bold]Selected runtime route:[/bold] {sel or 'none'}")
+        console.print(f"[dim]{result.get('explanation')}[/dim]")
+        excl = result.get("lifecycle_exclusions") or []
+        if excl:
+            console.print(f"\n[bold]Lifecycle exclusions ({len(excl)}):[/bold]")
+            for e in excl[:6]:
+                console.print(
+                    f"  • {e['model']} × {e['compute']} [{e.get('lifecycle')}] — {e.get('exclusion_reason')}"
+                )
+        sp_excl = result.get("serving_pattern_exclusions") or []
+        if sp_excl:
+            console.print(f"\n[bold]Serving-pattern / latency notes ({len(sp_excl)}):[/bold]")
+            for e in sp_excl[:4]:
+                console.print(f"  • {e['model']} × {e['compute']}")
+        loc_excl = result.get("locality_exclusions") or []
+        if loc_excl:
+            console.print(f"\n[bold]Locality soft-exclusions ({len(loc_excl)}):[/bold]")
+            for e in loc_excl[:4]:
+                console.print(f"  • {e.get('model')} × {e.get('compute')}")
+        deployed = result.get("currently_deployed_eligible") or []
+        if deployed:
+            console.print("\n[bold]Currently deployed eligible:[/bold]")
+            for d in deployed[:5]:
+                console.print(f"  • {d['model']} × {d['compute']} ({d.get('endpoint_id')})")
+
+
+@app.command()
 def ui() -> None:
     """Launch Streamlit UI locally."""
     ui_dir = repo_root() / "ui"

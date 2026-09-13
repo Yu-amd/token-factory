@@ -1,0 +1,126 @@
+# MI350P Tech Preview AIM cells — merged by routing_matrix loader.
+# NOT scraped from public GA AIM catalog. Does NOT replace catalog/aims.yaml authority.
+#
+# Provenance: release-planning / tech-preview as_of ~2026-09-13.
+# Lifecycle is always tech-preview (orthogonal to support_level).
+# Production / amd-enterprise defaults exclude these cells (allow_tech_preview=false).
+version: "1"
+metadata:
+  description: >
+    Additive Tech Preview AIM × MI350P compatibility. aims.yaml remains the
+    authoritative GA CAN-RUN catalog. These cells are evaluation / tech-preview only.
+  provenance:
+    method: release-planning
+    source: tech-preview
+    as_of: "2026-09-13"
+    notes: >
+      Not scraped from public GA AIM accelerator_support matrix.
+      Model IDs normalized via catalog/model-aliases.yaml; source strings preserved.
+  default_lifecycle: tech-preview
+  default_support: preview
+  accelerator: MI350P
+  family: instinct
+
+# Canonical model IDs only (after alias normalization). Each appears once.
+aims:
+  - model: openai/gpt-oss-120b
+    support:
+      instinct:
+        MI350P: { support: preview, lifecycle: tech-preview }
+    provenance:
+      source_string: openai/gpt-oss-120b
+      method: release-planning
+      as_of: "2026-09-13"
+
+  - model: meta-llama/Llama-3.3-70B-Instruct
+    support:
+      instinct:
+        MI350P: { support: preview, lifecycle: tech-preview }
+    provenance:
+      source_string: meta-llama/Llama-3.3-70B-Instruct
+      method: release-planning
+      as_of: "2026-09-13"
+
+  - model: mistralai/Mistral-Small-3.2-24B-Instruct-2506
+    support:
+      instinct:
+        MI350P: { support: preview, lifecycle: tech-preview }
+    provenance:
+      source_string: mistralai/Mistral-Small-3.2-24B-Instruct-2501
+      method: release-planning
+      as_of: "2026-09-13"
+      notes: Normalized date suffix 2501 → canonical catalog 2506.
+
+  - model: google/gemma-3-27b-it
+    support:
+      instinct:
+        MI350P: { support: preview, lifecycle: tech-preview }
+    provenance:
+      source_string: google/gemma-3-27b-it
+      method: release-planning
+      as_of: "2026-09-13"
+
+  - model: Qwen/Qwen3.8-27B
+    support:
+      instinct:
+        MI350P: { support: preview, lifecycle: tech-preview }
+    provenance:
+      source_string: Qwen/Qwen3.8-27B
+      method: release-planning
+      as_of: "2026-09-13"
+
+  - model: google/gemma-4-31B-it
+    support:
+      instinct:
+        MI350P: { support: preview, lifecycle: tech-preview }
+    provenance:
+      source_string: google/gemma4-31b-it
+      method: release-planning
+      as_of: "2026-09-13"
+      notes: Normalized gemma4-31b-it → google/gemma-4-31B-it.
+
+  - model: google/gemma4-26B-A4B
+    support:
+      instinct:
+        MI350P: { support: preview, lifecycle: tech-preview }
+    provenance:
+      source_string: google/gemma4-26B-A4B
+      method: release-planning
+      as_of: "2026-09-13"
+      notes: Distinct from google/gemma-4-E4B-it; kept as supplied ID.
+
+  - model: google/gemma-4-12B-it
+    support:
+      instinct:
+        MI350P: { support: preview, lifecycle: tech-preview }
+    provenance:
+      source_string: google/gemma-4-12B-it
+      method: release-planning
+      as_of: "2026-09-13"
+
+  - model: openai/gpt-oss-20b
+    support:
+      instinct:
+        MI350P: { support: preview, lifecycle: tech-preview }
+    provenance:
+      source_string: openai/gpt-oss-20b
+      method: release-planning
+      as_of: "2026-09-13"
+
+  - model: Qwen/Qwen3.6-35B-A3B
+    support:
+      instinct:
+        MI350P: { support: preview, lifecycle: tech-preview }
+    provenance:
+      source_string: Qwen/Qwen3.6-35B-A3B
+      method: release-planning
+      as_of: "2026-09-13"
+
+  - model: Qwen/Qwen3.6-27B
+    support:
+      instinct:
+        MI350P: { support: preview, lifecycle: tech-preview }
+    provenance:
+      source_string: Qwen/Qwen3.6-27B
+      method: release-planning
+      as_of: "2026-09-13"

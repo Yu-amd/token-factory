@@ -7,6 +7,60 @@ from typing import Any
 from token_factory.version import PINNED_VERSIONS, VIRTUAL_MODEL
 
 
+def _routing_matrix_metadata(policy: dict[str, Any]) -> dict[str, Any]:
+    """Light V2 pointers for UI/CLI — does not change the V1 gateway path."""
+    priority_mode = policy.get("priority_mode", "balanced")
+    policy_name = policy.get("name")
+    objective = priority_mode
+    policy_version = None
+    try:
+        from token_factory.routing_matrix.loader import load_routing_bundle
+
+        bundle = load_routing_bundle()
+        aliases = bundle["use_cases"].get("priority_mode_aliases") or {}
+        # Prefer explicit profile name (amd-balanced) then priority_mode
+        objective = aliases.get(policy_name or "", aliases.get(priority_mode, priority_mode))
+        policy_version = (
+            (bundle["policy"].get("metadata") or {})
+            .get("amd_routing_policy", {})
+            .get("version")
+            or bundle["policy"].get("version")
+        )
+    except Exception:
+        # Compile must not fail if additive catalogs are absent
+        fallback = {
+            "balanced": "balanced",
+            "cost": "token-cost",
+            "quality": "quality",
+            "latency": "latency",
+            "edge": "edge-local",
+            "enterprise": "enterprise",
+            "amd-balanced": "balanced",
+            "amd-quality": "quality",
+            "amd-cost-efficient": "token-cost",
+            "amd-low-latency": "latency",
+            "amd-edge-first": "edge-local",
+            "amd-enterprise": "enterprise",
+        }
+        objective = fallback.get(policy_name or "", fallback.get(priority_mode, priority_mode))
+
+    return {
+        "available": True,
+        "doc": "docs/amd-routing-matrix.md",
+        "cli": "token-factory recommend",
+        "policy_catalog": "catalog/amd-routing-policy.yaml",
+        "policy_version": policy_version,
+        "priority_mode": priority_mode,
+        "policy_name": policy_name,
+        "objective_alias": objective,
+        "thesis": {
+            "aim_support": "CAN RUN",
+            "amd_recommendation": "SHOULD RUN",
+            "runtime_inventory": "CAN ROUTE NOW",
+        },
+    }
+
+
 def compile_ui_metadata(
     endpoints: dict[str, Any],
     policies: dict[str, Any],
@@ -43,6 +97,7 @@ def compile_ui_metadata(
         "priority_mode": policy.get("priority_mode", "balanced"),
         "routes": routes,
         "endpoints": endpoints.get("endpoints", []),
+        "routing_matrix": _routing_matrix_metadata(policy),
         "links": {
             "gateway": "http://127.0.0.1:18080",
             "semantic_router_api": "http://127.0.0.1:8081",

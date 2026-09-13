@@ -241,7 +241,21 @@ make ui   # http://localhost:8501 — caption should show live AIM
 
 ---
 
-## Recommended V2 (prioritized)
+## V2 note — AMD Opinionated Routing Matrix (additive)
+
+Shipped as an additive layer on V1 (no gateway rebuild):
+
+- Catalogs: `compute.yaml`, `use-cases.yaml`, `models.yaml`, `cost-model.yaml`, `amd-routing-policy.yaml` (`aims.yaml` remains authoritative for GA CAN RUN)
+- Extensions: `aims-tech-preview.yaml` (MI350P TP), `model-aliases.yaml`, lifecycle modes, **Lowest-Cost Sufficient**, Radeon Preview lifecycle=`preview`
+- Engine + CLI: `token_factory.routing_matrix` / `token-factory recommend --lifecycle …` / `make recommend`
+- UI: **AMD Routing Matrix** — MI350P column, lifecycle selector, Best Performance / Balance / Lowest-Cost Sufficient cards
+- Docs: [docs/amd-routing-matrix.md](docs/amd-routing-matrix.md), [docs/routing-economics.md](docs/routing-economics.md)
+- Compile embeds light `routing_matrix` metadata in `ui-metadata.json` (objective alias only)
+
+Thesis: **AIM = CAN**, **Matrix = SHOULD**, **Inventory = CAN ROUTE NOW**, **Lifecycle = GA vs Preview vs Tech Preview**.
+Cost ranking is relative — no fabricated $/token or MI350P benchmarks.
+
+## Recommended next (prioritized)
 
 1. **Prove and automate failover** — health-aware routing, AIGW priority path validation, chaos tests.
 2. **Remove SR selector patch** — when chart 0.3.x+ fixes dashboard/router Service selectors.
@@ -250,6 +264,7 @@ make ui   # http://localhost:8501 — caption should show live AIM
 5. **AIGW body rewrite** — eliminate lora_name = model ID hack when upstream supports dual extproc override.
 6. **In-cluster Token Factory UI** — optional Deployment with ServiceAccount RBAC.
 7. **EPYC / Radeon routes** — edge endpoints in `endpoints.yaml` + `amd-edge-first` profile live test.
+8. **Measured token economics** — fill `cost-model.yaml` benchmarks when AMD numbers land (keep relative until then).
 
 ---
 

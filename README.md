@@ -12,9 +12,43 @@ Repository: https://github.com/Yu-amd/token-factory
 - **Python CLI** (`token-factory`): preflight, compile, install, verify, ports, UI, route explain
 - **Policy profiles**: balanced, quality, cost-efficient, low-latency, edge-first, enterprise
 - **AIM catalog** from AMD Enterprise AI accelerator matrix
-- **Streamlit UI** — Playground with **live TTFT** (SR classify → direct AIM stream), routing, architecture, inventory, operations
+- **Streamlit UI** — Playground with **live TTFT** (SR classify → direct AIM stream), **AMD Routing Matrix**, routing, architecture, inventory, operations
+- **AMD Opinionated Routing** — workload → model × compute recommendations (`token-factory recommend`)
 - **Mock OpenAI backends** for kind/CI without GPU
 - **Clean port-forward manager** with PID tracking (no blind `pkill kubectl`)
+
+## AMD Opinionated Routing
+
+Token Factory V1 knows what is **deployed** and how Semantic Router classifies a request.
+V2 adds an opinionated matrix on top of the authoritative AIM catalog — without replacing the gateway path:
+
+| Concept | Meaning | Source |
+|---------|---------|--------|
+| **AIM** | CAN RUN | `catalog/aims.yaml` |
+| **Matrix** | SHOULD RUN | `catalog/amd-routing-policy.yaml` + engine |
+| **Inventory** | CAN ROUTE NOW | `config/endpoints.yaml` |
+
+Use cases, compute metadata, model capabilities, and a relative (non-fabricated) cost model live under `catalog/`. Rankings are produced by `RecommendationEngine` and surfaced in:
+
+- UI tab **AMD Routing Matrix** (`make ui`)
+- CLI: `token-factory recommend --use-case coding-assistant --objective balanced`
+- Makefile: `make recommend`
+
+Details, methodology, overrides, and CLI examples: [docs/amd-routing-matrix.md](docs/amd-routing-matrix.md).
+
+### AMD Compute Positioning
+
+- **EPYC** — CPU-centric / batch / low-QPS / fleet utilization — **not** a GPU interactive competitor; rises for batch/offline + relaxed latency; does not auto-rise for high-concurrency interactive.
+- **Radeon** — local / workstation / privacy when capable.
+- **MI350P** — PCIe enterprise Tech Preview; private-eval visibility; never silent GA.
+- Summary cards use **distinct selectors** (Performance / Balance / Lowest-Cost Sufficient).
+Economics, capability floors, MI350P Tech Preview, and Radeon Preview:
+[docs/routing-economics.md](docs/routing-economics.md).
+
+**MI350P** (PCIe Instinct) and **Radeon Preview** AIMs are lifecycle-gated
+(`tech-preview` / `preview`) — never silent production GA. Use
+`token-factory recommend --lifecycle evaluation` or the Matrix lifecycle selector
+for evaluation; production defaults exclude them.
 
 ## Architecture
 
@@ -95,13 +129,14 @@ curl -s http://127.0.0.1:18080/v1/chat/completions \
 ```
 config/                 Example + active YAML config
 policies/               amd-* routing profiles
-catalog/aims.yaml       AMD AIM support matrix
-src/token_factory/      Python package (CLI, compiler, catalog)
+catalog/aims.yaml       AMD AIM support matrix (CAN RUN)
+catalog/*               Use-cases, compute, models, cost, amd-routing-policy (SHOULD RUN)
+src/token_factory/      Python package (CLI, compiler, catalog, routing_matrix)
 deploy/                 Helm values + K8s manifests
 scripts/                Modular install/apply/uninstall
 generated/              Compiler output (gitignored content)
 tests/                  Unit tests + mock backends
-ui/                     Streamlit app
+ui/                     Streamlit app (Playground + AMD Routing Matrix)
 observability/          Grafana dashboard JSON, Prometheus rules
 docs/                   Architecture, deployment, ops guides
 ```
@@ -119,11 +154,12 @@ docs/                   Architecture, deployment, ops guides
 | `token-factory ports start\|stop\|list` | Tracked port-forwards |
 | `token-factory route-explain "..."` | Heuristic route explanation |
 | `token-factory catalog-update` | Refresh catalog metadata timestamp |
+| `token-factory recommend` | AMD Opinionated Routing recommendations |
 | `token-factory ui` | Launch Streamlit |
 
 ## Makefile targets
 
-`help`, `preflight`, `compile`, `install`, `apply`, `verify`, `test`, `demo`, `status`, `dashboard`, `grafana`, `ports`, `ui`, `smoke-ui`, `logs`, `reset`, `uninstall`, `update-aim-catalog`, `lint`
+`help`, `preflight`, `compile`, `install`, `apply`, `verify`, `test`, `demo`, `status`, `dashboard`, `grafana`, `ports`, `ui`, `smoke-ui`, `recommend`, `logs`, `reset`, `uninstall`, `update-aim-catalog`, `lint`
 
 ## Example endpoints (reference)
 
@@ -157,6 +193,7 @@ CI (`.github/workflows/ci.yml`): ruff, pytest, compile, Helm template dashboard 
 ## Documentation
 
 - [BUILD_REPORT.md](BUILD_REPORT.md) — V1 verified status, routing tests, workarounds
+- [AMD Opinionated Routing Matrix](docs/amd-routing-matrix.md) — CAN / SHOULD / CAN ROUTE NOW
 - [Configuration](docs/configuration.md)
 - [Deployment](docs/deployment.md)
 - [Streamlit UI / Playground](docs/ui.md)

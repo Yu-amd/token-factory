@@ -8,12 +8,21 @@ metadata:
   - preview
   - unoptimized
   - general
+  # Orthogonal to support_levels — see aims-tech-preview.yaml + routing_matrix loader
+  lifecycles:
+  - ga
+  - preview
+  - tech-preview
+  - planned
+  default_lifecycle: ga
+  # support_level "preview" cells (e.g. Radeon) infer lifecycle=preview unless overridden
   last_refreshed: '2026-09-13'
 accelerators:
   instinct:
   - MI250X
   - MI300X
   - MI325X
+  - MI350P
   - MI350X
   - MI355X
   epyc:

@@ -1,0 +1,748 @@
+# Enterprise use-case taxonomy for AMD Opinionated Routing Matrix.
+# Capabilities are requirements for eligibility — not vendor marketing claims.
+version: "1"
+metadata:
+  description: Workload taxonomy for Token Factory recommendation engine.
+  published: "2026-09-13"
+  policy_version: "2.0"
+
+objectives:
+  - id: balanced
+    display_name: Balanced
+  - id: token-cost
+    display_name: Lowest Token Cost
+  - id: lowest-cost-sufficient
+    display_name: Lowest-Cost Sufficient
+  - id: quality
+    display_name: Highest Quality
+  - id: latency
+    display_name: Lowest Latency
+  - id: throughput
+    display_name: Highest Throughput
+  - id: edge-local
+    display_name: Local / Workstation First
+  - id: enterprise
+    display_name: Enterprise Production
+
+# Maps V1 priority_mode values and policy profile names → matrix objectives
+priority_mode_aliases:
+  balanced: balanced
+  cost: token-cost
+  quality: quality
+  latency: latency
+  edge: edge-local
+  enterprise: enterprise
+  lowest-cost-sufficient: lowest-cost-sufficient
+  local: edge-local
+  workstation: edge-local
+  privacy: edge-local
+  # Policy pack names under policies/amd-*.yaml (preserve config names)
+  amd-balanced: balanced
+  amd-quality: quality
+  amd-cost-efficient: token-cost
+  amd-low-latency: latency
+  amd-edge-first: edge-local
+  amd-enterprise: enterprise
+
+# Lifecycle filter modes (UI selector). Orthogonal to AIM support_level.
+lifecycle_modes:
+  production:
+    display_name: Production
+    allow: [ga]
+    allow_preview: false
+    allow_tech_preview: false
+  production-preview:
+    display_name: Production + Preview
+    allow: [ga, preview]
+    allow_preview: true
+    allow_tech_preview: false
+  evaluation:
+    display_name: Tech Preview / Evaluation
+    allow: [ga, preview, tech-preview]
+    allow_preview: true
+    allow_tech_preview: true
+  all:
+    display_name: All
+    allow: [ga, preview, tech-preview, planned]
+    allow_preview: true
+    allow_tech_preview: true
+
+# Preference labels (context-relevant advisory tags on selected cards / Rank #1)
+preference_labels:
+  - PERFORMANCE_PREFERRED
+  - ECONOMIC_PREFERRED
+  - BALANCED_PREFERRED
+  - EDGE_LOCAL_PREFERRED
+  - LOCAL_PREFERRED
+  - WORKSTATION_PREFERRED
+  - PRIVACY_PREFERRED
+  - PRODUCTION_PREFERRED
+  - EVALUATION_PREFERRED
+  - BATCH_PREFERRED
+
+# Serving patterns (Interactive ≠ high traffic; Batch ≠ high-concurrency interactive)
+serving_patterns:
+  - id: interactive
+    display_name: Interactive
+    default_latency: critical
+  - id: online-throughput
+    display_name: Online Throughput
+    default_latency: important
+  - id: batch
+    display_name: Batch
+    default_latency: relaxed
+  - id: offline-batch
+    display_name: Offline Batch
+    default_latency: unconstrained
+
+latency_requirements:
+  - critical
+  - important
+  - relaxed
+  - unconstrained
+
+# Qualitative capability floors for lowest-cost-sufficient (deterministic).
+# Model must meet or exceed floor via size_class / specialization heuristics — not raw parameter count ranking.
+capability_floors:
+  simple-chat: basic
+  classification: basic
+  code-completion: standard
+  summarization: standard
+  batch-summarization: standard
+  offline-document-batch: standard
+  extraction: standard
+  structured-generation: standard
+  rag-simple: standard
+  translation: standard
+  coding-assistant: standard
+  enterprise-chat: high
+  document-analysis: high
+  rag-complex: high
+  long-context-rag: high
+  knowledge-assistant: high
+  code-generation: high
+  code-review: high
+  general-reasoning: high
+  tool-use-agent: high
+  workflow-automation: high
+  vlm: standard
+  image-understanding: standard
+  document-vision: high
+  medical: high
+  domain-specific-assistant: standard
+  repository-reasoning: frontier
+  software-engineering-agent: frontier
+  complex-reasoning: frontier
+  mathematical-reasoning: frontier
+  scientific-reasoning: frontier
+  enterprise-agent: frontier
+  multi-step-agent: frontier
+  multimodal-agent: frontier
+  financial-analysis: frontier
+  scientific: frontier
+
+# Escalation continuum (explainable, policy-driven soft order — not a fixed route chain)
+escalation_continuum:
+  - epyc
+  - radeon
+  - MI350P
+  - instinct-rack
+
+use_cases:
+  # --- General enterprise AI ---
+  - id: simple-chat
+    display_name: Simple Chat
+    category: general
+    capabilities:
+      required: [text-generation]
+      preferred: []
+    workload:
+      latency_sensitivity: medium
+      expected_context: low
+      concurrency: low
+      quality_requirement: medium
+    serving_patterns_preferred: [interactive, batch]
+    latency_requirement: important
+    deployment:
+      typical: [edge, workstation, enterprise]
+    optimization_default: token-cost
+    semantic_domains: [other, business]
+
+  - id: enterprise-chat
+    display_name: Enterprise Chat
+    category: general
+    capabilities:
+      required: [text-generation]
+      preferred: [reasoning, tool-use]
+    workload:
+      latency_sensitivity: high
+      expected_context: medium
+      concurrency: high
+      quality_requirement: high
+    serving_patterns_preferred: [interactive, online-throughput]
+    latency_requirement: critical
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: enterprise
+    semantic_domains: [business, other]
+
+  - id: summarization
+    display_name: Summarization
+    category: general
+    capabilities:
+      required: [text-generation]
+      preferred: [long-context]
+    workload:
+      latency_sensitivity: medium
+      expected_context: high
+      concurrency: medium
+      quality_requirement: medium
+    serving_patterns_preferred: [batch, online-throughput, interactive]
+    latency_requirement: relaxed
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: balanced
+    semantic_domains: [business, other, history]
+
+  - id: batch-summarization
+    display_name: Batch Summarization
+    category: general
+    capabilities:
+      required: [text-generation]
+      preferred: [long-context]
+    workload:
+      latency_sensitivity: low
+      expected_context: high
+      concurrency: low
+      quality_requirement: medium
+    serving_patterns_preferred: [batch, offline-batch]
+    latency_requirement: relaxed
+    deployment:
+      typical: [enterprise, datacenter, edge]
+    optimization_default: token-cost
+    semantic_domains: [business, other]
+
+  - id: offline-document-batch
+    display_name: Offline Document Batch
+    category: utility
+    capabilities:
+      required: [text-generation]
+      preferred: [long-context]
+    workload:
+      latency_sensitivity: low
+      expected_context: high
+      concurrency: low
+      quality_requirement: medium
+    serving_patterns_preferred: [offline-batch, batch]
+    latency_requirement: unconstrained
+    deployment:
+      typical: [enterprise, datacenter, edge]
+    optimization_default: lowest-cost-sufficient
+    semantic_domains: [business, other]
+
+  - id: document-analysis
+    display_name: Document Analysis
+    category: general
+    capabilities:
+      required: [text-generation, long-context]
+      preferred: [reasoning]
+    workload:
+      latency_sensitivity: medium
+      expected_context: very-high
+      concurrency: medium
+      quality_requirement: high
+    serving_patterns_preferred: [batch, interactive]
+    latency_requirement: important
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: quality
+    semantic_domains: [business, law, other]
+
+  - id: classification
+    display_name: Classification
+    category: utility
+    capabilities:
+      required: [text-generation]
+      preferred: []
+    workload:
+      latency_sensitivity: high
+      expected_context: low
+      concurrency: high
+      quality_requirement: medium
+    deployment:
+      typical: [edge, enterprise, datacenter]
+    optimization_default: token-cost
+    semantic_domains: [other]
+
+  - id: extraction
+    display_name: Extraction
+    category: utility
+    capabilities:
+      required: [text-generation]
+      preferred: [tool-use]
+    workload:
+      latency_sensitivity: medium
+      expected_context: medium
+      concurrency: medium
+      quality_requirement: high
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: balanced
+    semantic_domains: [business, law, other]
+
+  - id: structured-generation
+    display_name: Structured Generation
+    category: general
+    capabilities:
+      required: [text-generation, tool-use]
+      preferred: []
+    workload:
+      latency_sensitivity: medium
+      expected_context: medium
+      concurrency: medium
+      quality_requirement: high
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: balanced
+    semantic_domains: [business, computer science]
+
+  # --- RAG ---
+  - id: rag-simple
+    display_name: Simple RAG
+    category: rag
+    capabilities:
+      required: [text-generation]
+      preferred: [long-context]
+    workload:
+      latency_sensitivity: high
+      expected_context: medium
+      concurrency: medium
+      quality_requirement: medium
+    deployment:
+      typical: [enterprise, datacenter, edge]
+    optimization_default: balanced
+    semantic_domains: [business, other]
+
+  - id: rag-complex
+    display_name: Complex RAG
+    category: rag
+    capabilities:
+      required: [text-generation, reasoning, long-context]
+      preferred: [tool-use]
+    workload:
+      latency_sensitivity: medium
+      expected_context: high
+      concurrency: medium
+      quality_requirement: high
+    deployment:
+      typical: [datacenter, enterprise]
+    optimization_default: quality
+    semantic_domains: [business, law, other]
+
+  - id: long-context-rag
+    display_name: Long-Context RAG
+    category: rag
+    capabilities:
+      required: [text-generation, long-context]
+      preferred: [reasoning]
+    workload:
+      latency_sensitivity: medium
+      expected_context: very-high
+      concurrency: medium
+      quality_requirement: high
+    deployment:
+      typical: [datacenter]
+    optimization_default: quality
+    semantic_domains: [business, law, other]
+
+  - id: knowledge-assistant
+    display_name: Knowledge Assistant
+    category: rag
+    capabilities:
+      required: [text-generation]
+      preferred: [reasoning, long-context, tool-use]
+    workload:
+      latency_sensitivity: high
+      expected_context: high
+      concurrency: high
+      quality_requirement: high
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: enterprise
+    semantic_domains: [business, other]
+
+  # --- Coding ---
+  - id: code-completion
+    display_name: Code Completion
+    category: coding
+    capabilities:
+      required: [text-generation, coding]
+      preferred: []
+    workload:
+      latency_sensitivity: very-high
+      expected_context: low
+      concurrency: medium
+      quality_requirement: medium
+    deployment:
+      typical: [workstation, edge, enterprise]
+    optimization_default: latency
+    semantic_domains: [computer science]
+
+  - id: coding-assistant
+    display_name: Coding Assistant
+    category: coding
+    capabilities:
+      required: [text-generation, coding]
+      preferred: [reasoning, tool-use]
+    workload:
+      latency_sensitivity: high
+      expected_context: medium
+      concurrency: medium
+      quality_requirement: high
+    serving_patterns_preferred: [interactive, online-throughput]
+    latency_requirement: critical
+    deployment:
+      typical: [workstation, enterprise, datacenter]
+    optimization_default: balanced
+    semantic_domains: [computer science]
+
+  - id: code-generation
+    display_name: Code Generation
+    category: coding
+    capabilities:
+      required: [text-generation, coding]
+      preferred: [reasoning]
+    workload:
+      latency_sensitivity: medium
+      expected_context: medium
+      concurrency: medium
+      quality_requirement: high
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: quality
+    semantic_domains: [computer science]
+
+  - id: code-review
+    display_name: Code Review
+    category: coding
+    capabilities:
+      required: [text-generation, coding, reasoning]
+      preferred: [long-context]
+    workload:
+      latency_sensitivity: medium
+      expected_context: high
+      concurrency: medium
+      quality_requirement: high
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: quality
+    semantic_domains: [computer science]
+
+  - id: repository-reasoning
+    display_name: Repository-Level Coding Agent
+    category: coding
+    capabilities:
+      required: [text-generation, coding, long-context, reasoning, tool-use]
+      preferred: []
+    workload:
+      latency_sensitivity: medium
+      expected_context: very-high
+      concurrency: medium
+      quality_requirement: very-high
+    deployment:
+      typical: [datacenter, enterprise]
+    optimization_default: quality
+    semantic_domains: [computer science]
+
+  - id: software-engineering-agent
+    display_name: Software Engineering Agent
+    category: coding
+    capabilities:
+      required: [text-generation, coding, reasoning, tool-use]
+      preferred: [long-context]
+    workload:
+      latency_sensitivity: medium
+      expected_context: high
+      concurrency: medium
+      quality_requirement: very-high
+    deployment:
+      typical: [datacenter, enterprise]
+    optimization_default: quality
+    semantic_domains: [computer science]
+
+  # --- Reasoning ---
+  - id: general-reasoning
+    display_name: General Reasoning
+    category: reasoning
+    capabilities:
+      required: [text-generation, reasoning]
+      preferred: []
+    workload:
+      latency_sensitivity: medium
+      expected_context: medium
+      concurrency: medium
+      quality_requirement: high
+    deployment:
+      typical: [datacenter, enterprise]
+    optimization_default: quality
+    semantic_domains: [math, physics, philosophy, other]
+
+  - id: complex-reasoning
+    display_name: Complex Reasoning
+    category: reasoning
+    capabilities:
+      required: [text-generation, reasoning]
+      preferred: [long-context]
+    workload:
+      latency_sensitivity: low
+      expected_context: high
+      concurrency: low
+      quality_requirement: very-high
+    deployment:
+      typical: [datacenter]
+    optimization_default: quality
+    semantic_domains: [math, physics, chemistry, engineering]
+
+  - id: mathematical-reasoning
+    display_name: Mathematical Reasoning
+    category: reasoning
+    capabilities:
+      required: [text-generation, reasoning]
+      preferred: []
+    workload:
+      latency_sensitivity: medium
+      expected_context: medium
+      concurrency: medium
+      quality_requirement: very-high
+    deployment:
+      typical: [datacenter, enterprise]
+    optimization_default: quality
+    semantic_domains: [math]
+
+  - id: scientific-reasoning
+    display_name: Scientific Reasoning
+    category: reasoning
+    capabilities:
+      required: [text-generation, reasoning]
+      preferred: [long-context]
+    workload:
+      latency_sensitivity: medium
+      expected_context: high
+      concurrency: medium
+      quality_requirement: very-high
+    deployment:
+      typical: [datacenter]
+    optimization_default: quality
+    semantic_domains: [physics, chemistry, engineering]
+
+  # --- Agentic ---
+  - id: tool-use-agent
+    display_name: Tool-Use Agent
+    category: agentic
+    capabilities:
+      required: [text-generation, tool-use]
+      preferred: [reasoning]
+    workload:
+      latency_sensitivity: high
+      expected_context: medium
+      concurrency: medium
+      quality_requirement: high
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: balanced
+    semantic_domains: [computer science, business, other]
+
+  - id: enterprise-agent
+    display_name: Enterprise Agent
+    category: agentic
+    capabilities:
+      required: [text-generation, tool-use, reasoning]
+      preferred: [long-context]
+    workload:
+      latency_sensitivity: medium
+      expected_context: high
+      concurrency: high
+      quality_requirement: high
+    deployment:
+      typical: [datacenter, enterprise]
+    optimization_default: enterprise
+    semantic_domains: [business, other]
+
+  - id: multi-step-agent
+    display_name: Multi-Step Agent
+    category: agentic
+    capabilities:
+      required: [text-generation, tool-use, reasoning]
+      preferred: [long-context, coding]
+    workload:
+      latency_sensitivity: medium
+      expected_context: high
+      concurrency: medium
+      quality_requirement: very-high
+    deployment:
+      typical: [datacenter]
+    optimization_default: quality
+    semantic_domains: [computer science, business, other]
+
+  - id: workflow-automation
+    display_name: Workflow Automation
+    category: agentic
+    capabilities:
+      required: [text-generation, tool-use]
+      preferred: [reasoning]
+    workload:
+      latency_sensitivity: medium
+      expected_context: medium
+      concurrency: high
+      quality_requirement: high
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: throughput
+    semantic_domains: [business, other]
+
+  # --- Multimodal ---
+  - id: vlm
+    display_name: Vision-Language Model
+    category: multimodal
+    capabilities:
+      required: [text-generation, vision]
+      preferred: []
+    workload:
+      latency_sensitivity: medium
+      expected_context: medium
+      concurrency: medium
+      quality_requirement: high
+    deployment:
+      typical: [workstation, datacenter]
+    optimization_default: balanced
+    semantic_domains: [other]
+
+  - id: image-understanding
+    display_name: Image Understanding
+    category: multimodal
+    capabilities:
+      required: [text-generation, vision]
+      preferred: []
+    workload:
+      latency_sensitivity: medium
+      expected_context: low
+      concurrency: medium
+      quality_requirement: high
+    deployment:
+      typical: [workstation, edge, datacenter]
+    optimization_default: balanced
+    semantic_domains: [other]
+
+  - id: document-vision
+    display_name: Document Vision
+    category: multimodal
+    capabilities:
+      required: [text-generation, vision, long-context]
+      preferred: [reasoning]
+    workload:
+      latency_sensitivity: medium
+      expected_context: high
+      concurrency: medium
+      quality_requirement: high
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: quality
+    semantic_domains: [business, law, other]
+
+  - id: multimodal-agent
+    display_name: Multimodal Agent
+    category: multimodal
+    capabilities:
+      required: [text-generation, vision, tool-use]
+      preferred: [reasoning]
+    workload:
+      latency_sensitivity: medium
+      expected_context: high
+      concurrency: medium
+      quality_requirement: very-high
+    deployment:
+      typical: [datacenter, workstation]
+    optimization_default: quality
+    semantic_domains: [other, computer science]
+
+  # --- Specialized ---
+  - id: translation
+    display_name: Translation
+    category: specialized
+    capabilities:
+      required: [text-generation]
+      preferred: []
+    workload:
+      latency_sensitivity: high
+      expected_context: medium
+      concurrency: high
+      quality_requirement: high
+    deployment:
+      typical: [enterprise, edge, datacenter]
+    optimization_default: latency
+    semantic_domains: [other]
+
+  - id: medical
+    display_name: Medical Assistant
+    category: specialized
+    capabilities:
+      required: [text-generation]
+      preferred: [reasoning, vision]
+    workload:
+      latency_sensitivity: medium
+      expected_context: medium
+      concurrency: medium
+      quality_requirement: very-high
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: quality
+    semantic_domains: [other]
+    preferred_models: [google/medgemma-27b-it]
+
+  - id: financial-analysis
+    display_name: Financial Analysis
+    category: specialized
+    capabilities:
+      required: [text-generation, reasoning]
+      preferred: [long-context, tool-use]
+    workload:
+      latency_sensitivity: medium
+      expected_context: high
+      concurrency: medium
+      quality_requirement: very-high
+    deployment:
+      typical: [datacenter, enterprise]
+    optimization_default: quality
+    semantic_domains: [economics, business]
+
+  - id: scientific
+    display_name: Scientific Assistant
+    category: specialized
+    capabilities:
+      required: [text-generation, reasoning]
+      preferred: [long-context]
+    workload:
+      latency_sensitivity: medium
+      expected_context: high
+      concurrency: medium
+      quality_requirement: very-high
+    deployment:
+      typical: [datacenter]
+    optimization_default: quality
+    semantic_domains: [physics, chemistry, engineering, math]
+
+  - id: domain-specific-assistant
+    display_name: Domain-Specific Assistant
+    category: specialized
+    capabilities:
+      required: [text-generation]
+      preferred: [reasoning]
+    workload:
+      latency_sensitivity: medium
+      expected_context: medium
+      concurrency: medium
+      quality_requirement: high
+    deployment:
+      typical: [enterprise, datacenter]
+    optimization_default: balanced
+    semantic_domains: [business, law, other]

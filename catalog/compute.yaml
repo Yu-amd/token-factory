@@ -1,0 +1,210 @@
+# AMD compute targets referenced by catalog/aims.yaml.
+# Characteristics are qualitative deployment traits — not benchmarks.
+version: "1"
+metadata:
+  description: AMD compute catalog for opinionated routing (separate from AIM support).
+  published: "2026-09-13"
+  source: Derived from accelerators listed in catalog/aims.yaml / AMD Enterprise AI AIM matrix.
+
+compute:
+  - id: MI250X
+    family: instinct
+    display_name: AMD Instinct MI250X
+    form_factor: OAM
+    deployment_class: [datacenter]
+    characteristics:
+      high_throughput: true
+      large_model: true
+      high_concurrency: true
+      local_workstation: false
+      edge_friendly: false
+      rack_scale: true
+    relative_cost_class: high
+    hardware_cost_class: high
+    token_economic_efficiency: null
+
+  - id: MI300X
+    family: instinct
+    display_name: AMD Instinct MI300X
+    form_factor: OAM
+    deployment_class: [datacenter, enterprise]
+    characteristics:
+      high_throughput: true
+      large_model: true
+      high_concurrency: true
+      local_workstation: false
+      edge_friendly: false
+      rack_scale: true
+    relative_cost_class: high
+    hardware_cost_class: high
+    token_economic_efficiency: null
+
+  - id: MI325X
+    family: instinct
+    display_name: AMD Instinct MI325X
+    form_factor: OAM
+    deployment_class: [datacenter, enterprise]
+    characteristics:
+      high_throughput: true
+      large_model: true
+      high_concurrency: true
+      local_workstation: false
+      edge_friendly: false
+      rack_scale: true
+    relative_cost_class: high
+    hardware_cost_class: high
+    token_economic_efficiency: null
+
+  - id: MI350P
+    family: instinct
+    display_name: AMD Instinct MI350P
+    form_factor: PCIe
+    deployment_class: [enterprise-server, oem, enterprise]
+    # Positioning: between Radeon/EPYC workstation and rack-scale Instinct (MI350X/MI355X).
+    # Not a performance alias of MI350X — conventional PCIe / OEM server footprint.
+    deployment_positioning: between-workstation-and-rack-instinct
+    characteristics:
+      high_throughput: true
+      large_model: true
+      high_concurrency: true
+      local_workstation: false
+      edge_friendly: false
+      pcie_form_factor: true
+      oem_server: true
+      conventional_pcie: true
+      rack_scale: false
+    # Qualitative only — no measured $/hour or tokens/sec
+    relative_cost_class: high
+    hardware_cost_class: high
+    token_economic_efficiency: null
+
+  - id: MI350X
+    family: instinct
+    display_name: AMD Instinct MI350X
+    form_factor: OAM
+    deployment_class: [datacenter, enterprise]
+    characteristics:
+      high_throughput: true
+      large_model: true
+      high_concurrency: true
+      local_workstation: false
+      edge_friendly: false
+      rack_scale: true
+    relative_cost_class: very-high
+    hardware_cost_class: very-high
+    token_economic_efficiency: null
+
+  - id: MI355X
+    family: instinct
+    display_name: AMD Instinct MI355X
+    form_factor: OAM
+    deployment_class: [datacenter, enterprise]
+    characteristics:
+      high_throughput: true
+      large_model: true
+      high_concurrency: true
+      local_workstation: false
+      edge_friendly: false
+      rack_scale: true
+    relative_cost_class: very-high
+    hardware_cost_class: very-high
+    token_economic_efficiency: null
+
+  - id: EPYC_9965
+    family: epyc
+    display_name: AMD EPYC 9965
+    form_factor: cpu
+    deployment_class: [datacenter, enterprise, edge]
+    # CPU-centric / batch / low-QPS / fleet utilization — NOT a GPU interactive competitor.
+    # Rises for batch/offline + relaxed/unconstrained latency; does NOT auto-rise for
+    # high-concurrency interactive serving.
+    positioning: cpu-batch-fleet
+    characteristics:
+      high_throughput: false
+      large_model: false
+      high_concurrency: false
+      local_workstation: false
+      edge_friendly: true
+      cpu_inference: true
+      batch_friendly: true
+      fleet_utilization: true
+    relative_cost_class: low
+    hardware_cost_class: low
+    token_economic_efficiency: null
+
+  - id: EPYC_ZEN4
+    family: epyc
+    display_name: AMD EPYC Zen 4
+    form_factor: cpu
+    deployment_class: [datacenter, enterprise, edge]
+    positioning: cpu-batch-fleet
+    characteristics:
+      high_throughput: false
+      large_model: false
+      high_concurrency: false
+      local_workstation: false
+      edge_friendly: true
+      cpu_inference: true
+      batch_friendly: true
+      fleet_utilization: true
+    relative_cost_class: low
+    hardware_cost_class: low
+    token_economic_efficiency: null
+
+  - id: EPYC_ZEN5
+    family: epyc
+    display_name: AMD EPYC Zen 5
+    form_factor: cpu
+    deployment_class: [datacenter, enterprise, edge]
+    positioning: cpu-batch-fleet
+    characteristics:
+      high_throughput: false
+      large_model: false
+      high_concurrency: false
+      local_workstation: false
+      edge_friendly: true
+      cpu_inference: true
+      batch_friendly: true
+      fleet_utilization: true
+    relative_cost_class: low
+    hardware_cost_class: low
+    token_economic_efficiency: null
+
+  - id: R9700
+    family: radeon
+    display_name: AMD Radeon AI PRO R9700
+    form_factor: PCIe
+    # Distinct class: workstation / local / departmental / developer — not "cheaper Instinct"
+    deployment_class: [workstation, edge, local, departmental, developer]
+    characteristics:
+      high_throughput: false
+      large_model: false
+      high_concurrency: false
+      local_workstation: true
+      edge_friendly: true
+      data_local: true
+      privacy_friendly: true
+      departmental: true
+      developer_workstation: true
+    relative_cost_class: medium
+    hardware_cost_class: medium
+    token_economic_efficiency: null
+
+  - id: W7900
+    family: radeon
+    display_name: AMD Radeon PRO W7900
+    form_factor: PCIe
+    deployment_class: [workstation, edge, local, departmental, developer]
+    characteristics:
+      high_throughput: false
+      large_model: false
+      high_concurrency: false
+      local_workstation: true
+      edge_friendly: true
+      data_local: true
+      privacy_friendly: true
+      departmental: true
+      developer_workstation: true
+    relative_cost_class: medium
+    hardware_cost_class: medium
+    token_economic_efficiency: null

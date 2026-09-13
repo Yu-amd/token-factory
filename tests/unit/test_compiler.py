@@ -41,3 +41,14 @@ def test_compile_outputs(tmp_path):
 
     ui = __import__("json").loads(outputs["ui_metadata"].read_text())
     assert ui["virtual_model"] == "token-factory/auto"
+    assert "routing_matrix" in ui
+    assert ui["routing_matrix"]["thesis"]["aim_support"] == "CAN RUN"
+    assert ui["routing_matrix"]["objective_alias"] in (
+        "balanced",
+        "token-cost",
+        "quality",
+        "latency",
+        "edge-local",
+        "enterprise",
+        "throughput",
+    )

@@ -1,0 +1,839 @@
+version: '1'
+metadata:
+  description: Supplementary model capability metadata for AMD Opinionated Routing
+    Matrix. Separate from AIM support in aims.yaml.
+  published: '2026-09-13'
+  source_policy: Do not invent unsupported modalities; vision/coding/reasoning flags
+    require name evidence or documented specialization.
+models:
+- model: CohereLabs/command-a-reasoning-08-2025
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: true
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: unknown
+  architecture: dense
+  specialization: reasoning
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: MiniMaxAI/MiniMax-M2.5
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: unknown
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: Qwen/Qwen3-235B-A22B
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: true
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: frontier
+  architecture: moe
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: Qwen/Qwen3-30B-A3B
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: moe
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: Qwen/Qwen3-32B
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: Qwen/Qwen3-8B
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: Qwen/Qwen3-Coder-Next
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: unknown
+  architecture: dense
+  specialization: coding
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: Qwen/Qwen3-VL-235B-A22B-Instruct
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: true
+    vision: true
+    tool_use: true
+    long_context: true
+  size_class: frontier
+  architecture: moe
+  specialization: vision
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: Qwen/Qwen3-VL-235B-A22B-Thinking
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: true
+    vision: true
+    tool_use: true
+    long_context: true
+  size_class: frontier
+  architecture: moe
+  specialization: vision
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: Qwen/Qwen3-VL-8B-Instruct
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: true
+    multimodal: true
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: vision
+  capability_tier: standard
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: >
+      Qwen3-VL — vision/multimodal=true from VL in model-id. Eligible for local VLM
+      on Radeon Preview (R9700/W7900). Text-only models remain ineligible for vision use cases.
+    confidence: medium
+    reviewed: '2026-09-13'
+    radeon_preview: true
+- model: Qwen/Qwen3.5-4B
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: Qwen/Qwen3.5-9B
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    multimodal: false
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: general
+  capability_tier: standard
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: >
+      Text-only instruct AIM. Radeon Preview on R9700/W7900. Not eligible for vision
+      use cases. coding=true for general instruct AIMs commonly used for software tasks.
+    confidence: medium
+    reviewed: '2026-09-13'
+    radeon_preview: true
+- model: Qwen/Qwen3.6-35B-A3B
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: moe
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: deepseek-ai/DeepSeek-R1
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: true
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: unknown
+  architecture: dense
+  specialization: reasoning
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: deepseek-ai/DeepSeek-R1-0528
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: true
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: unknown
+  architecture: dense
+  specialization: reasoning
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: deepseek-ai/DeepSeek-V3.1
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: unknown
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: deepseek-ai/DeepSeek-V3.1-Terminus
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: unknown
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: google/gemma-3-1b-it
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: google/gemma-3-27b-it
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: google/gemma-3n-E4B-it
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: true
+    multimodal: true
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: vision
+  capability_tier: standard
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: >
+      Gemma 3n E4B instruct — multimodal/vision from model-id (3n / E4B).
+      Radeon Preview AIM on R9700/W7900. Not a substitute for model-card verification.
+    confidence: medium
+    reviewed: '2026-09-13'
+    radeon_preview: true
+- model: google/gemma-4-31B-it
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: google/gemma-4-E4B-it
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: google/medgemma-27b-it
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: true
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: dense
+  specialization: vision
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: meta-llama/Llama-3.1-405B-Instruct
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: true
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: frontier
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: meta-llama/Llama-3.1-8B-Instruct
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    multimodal: false
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: general
+  capability_tier: standard
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: >
+      Text-only Llama 3.1 8B Instruct. Radeon Preview on R9700/W7900. Not vision-capable.
+      coding=true for general instruct AIMs commonly used for software tasks.
+    confidence: medium
+    reviewed: '2026-09-13'
+    radeon_preview: true
+- model: meta-llama/Llama-3.2-1B-Instruct
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: meta-llama/Llama-3.2-3B-Instruct
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: meta-llama/Llama-3.3-70B-Instruct
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: true
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: large
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: mistralai/Ministral-3-14B-Instruct-2512
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: mistralai/Ministral-3-14B-Reasoning-2512
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: true
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: reasoning
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: mistralai/Mistral-Large-3-675B-Instruct-2512
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: true
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: frontier
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: mistralai/Mistral-Small-24B-Instruct-2501
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: mistralai/Mistral-Small-3.2-24B-Instruct-2506
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: mistralai/Mixtral-8x22B-Instruct-v0.1
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: moe
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: mistralai/Mixtral-8x7B-Instruct-v0.1
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: moe
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: openai/gpt-oss-120b
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: true
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: large
+  architecture: moe
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: openai/gpt-oss-20b
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: moe
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: unsloth/gpt-oss-20b-BF16
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: moe
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence. coding=true for general instruct AIMs commonly
+      used for software tasks (medium confidence).
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: zai-org/GLM-4.7
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    tool_use: true
+    long_context: false
+  size_class: unknown
+  architecture: dense
+  specialization: general
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: Capabilities inferred from public model-id conventions (Coder/VL/R1/Instruct).
+      Not a substitute for model-card verification. tool_use assumed for instruct
+      chat AIMs at medium confidence.
+    confidence: medium
+    reviewed: '2026-09-13'
+- model: zai-org/GLM-4.7-Flash
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    multimodal: false
+    tool_use: true
+    long_context: false
+  size_class: small
+  architecture: dense
+  specialization: general
+  capability_tier: basic
+  provenance:
+    method: conservative-inference-from-model-id
+    notes: >
+      GLM-4.7-Flash — compact text AIM. Radeon Preview on R9700/W7900. Text-only;
+      not eligible for vision use cases.
+    confidence: medium
+    reviewed: '2026-09-13'
+    radeon_preview: true
+- model: Qwen/Qwen3.8-27B
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    multimodal: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: dense
+  specialization: general
+  capability_tier: standard
+  provenance:
+    method: release-planning-tech-preview
+    notes: >
+      MI350P Tech Preview AIM (as_of 2026-09-13). Not from public GA AIM scrape.
+      Capabilities inferred conservatively from model-id; not a model-card substitute.
+    confidence: medium
+    reviewed: '2026-09-13'
+    tech_preview: true
+- model: google/gemma4-26B-A4B
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    multimodal: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: moe
+  specialization: general
+  capability_tier: standard
+  provenance:
+    method: release-planning-tech-preview
+    notes: >
+      MI350P Tech Preview AIM. Distinct from google/gemma-4-E4B-it (A4B MoE naming).
+      Not from public GA AIM scrape.
+    confidence: medium
+    reviewed: '2026-09-13'
+    tech_preview: true
+- model: google/gemma-4-12B-it
+  capabilities:
+    text_generation: true
+    coding: false
+    reasoning: false
+    vision: false
+    multimodal: false
+    tool_use: true
+    long_context: true
+  size_class: small
+  architecture: dense
+  specialization: general
+  capability_tier: standard
+  provenance:
+    method: release-planning-tech-preview
+    notes: >
+      MI350P Tech Preview AIM (as_of 2026-09-13). Not from public GA AIM scrape.
+    confidence: medium
+    reviewed: '2026-09-13'
+    tech_preview: true
+- model: Qwen/Qwen3.6-27B
+  capabilities:
+    text_generation: true
+    coding: true
+    reasoning: false
+    vision: false
+    multimodal: false
+    tool_use: true
+    long_context: true
+  size_class: medium
+  architecture: dense
+  specialization: general
+  capability_tier: standard
+  provenance:
+    method: release-planning-tech-preview
+    notes: >
+      MI350P Tech Preview AIM (as_of 2026-09-13). Not from public GA AIM scrape.
+      Distinct from Qwen/Qwen3.6-35B-A3B.
+    confidence: medium
+    reviewed: '2026-09-13'
+    tech_preview: true

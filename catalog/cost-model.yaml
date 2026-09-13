@@ -1,0 +1,86 @@
+# Token economics schema for AMD Opinionated Routing Matrix.
+# NO fabricated $/token, TTFT, or tokens/sec figures.
+version: "1"
+metadata:
+  description: >
+    Cost model for ranking. Prefer measured throughput+infra costs when available.
+    Otherwise use relative_cost_class / hardware_cost_class only and label confidence
+    as relative/estimated. Separate hardware_cost_class from token_economic_efficiency.
+  published: "2026-09-13"
+  methodology_doc: docs/routing-economics.md
+
+defaults:
+  missing_cost_behavior: relative-ranking
+  utilization_levels: [low, medium, high]
+  # Cost language: Infrastructure Cost Class ≠ Token Economic Fit ≠ Cost Evidence
+  cost_evidence_levels: [MEASURED, ESTIMATED, RELATIVE, UNKNOWN]
+  default_cost_evidence: RELATIVE
+
+# Qualitative hardware footprint classes (NOT currency). Lower = cheaper footprint.
+hardware_cost_rank:
+  very-low: 1
+  low: 2
+  medium: 3
+  high: 4
+  very-high: 5
+
+# Relative token-economics classes (NOT currency). Distinct from hardware_cost_class —
+# cheapest hardware ≠ cheapest token at high utilization.
+relative_cost_rank:
+  very-low: 1
+  low: 2
+  medium: 3
+  high: 4
+  very-high: 5
+
+# Optional operator-supplied infrastructure costs ($/hour). Leave null = unknown.
+compute_costs:
+  MI250X: { dollars_per_accelerator_hour: null }
+  MI300X: { dollars_per_accelerator_hour: null }
+  MI325X: { dollars_per_accelerator_hour: null }
+  MI350P: { dollars_per_accelerator_hour: null }
+  MI350X: { dollars_per_accelerator_hour: null }
+  MI355X: { dollars_per_accelerator_hour: null }
+  EPYC_9965: { dollars_per_node_hour: null }
+  EPYC_ZEN4: { dollars_per_node_hour: null }
+  EPYC_ZEN5: { dollars_per_node_hour: null }
+  R9700: { dollars_per_accelerator_hour: null }
+  W7900: { dollars_per_accelerator_hour: null }
+
+# When utilization is high, prefer high_throughput compute even if hardware_cost_class is higher.
+utilization_bias:
+  low:
+    prefer_cpu_edge: true
+    prefer_pcie_footprint: true
+    prefer_local_workstation: true
+  medium:
+    prefer_cpu_edge: false
+    prefer_pcie_footprint: true
+  high:
+    prefer_high_throughput: true
+    prefer_rack_scale: true
+
+# Capability tiers used by lowest-cost-sufficient (qualitative floors).
+capability_tiers:
+  basic: 1
+  standard: 2
+  high: 3
+  frontier: 4
+
+# Schema for future benchmark ingestion — empty until AMD publishes numbers.
+# Do NOT invent tokens/sec, TTFT, concurrency, or $/1M tokens.
+measured:
+  schema:
+    fields:
+      - model
+      - compute
+      - ttft_ms
+      - tokens_per_sec
+      - input_tok_s
+      - output_tok_s
+      - concurrency
+      - dollars_per_million_tokens
+      - notes
+      - source
+      - as_of
+  benchmarks: []

@@ -24,3 +24,7 @@ When no dedicated reasoning AIM endpoint is configured, the `reasoning_route` (d
 ## Fallback
 
 `policy.fallback.chain` lists endpoint IDs tried in order when primary backend is unavailable. Eligibility is checked against `catalog/aims.yaml`.
+
+## AMD Opinionated Routing (V2)
+
+V1 profiles above still drive Semantic Router compile. The Opinionated Routing Matrix maps the same profile / `priority_mode` names to **recommendation objectives** (aliases in `catalog/use-cases.yaml`) without changing the gateway path. See [amd-routing-matrix.md](amd-routing-matrix.md).
