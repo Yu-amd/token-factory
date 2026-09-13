@@ -62,9 +62,8 @@ class DemoRunner:
 
     def plan(self, pack_id: str, *, seed: int | None = None, requests: int | None = None) -> dict[str, Any]:
         pack = load_pack(pack_id)
-        specs = expand_requests(
-            pack, max_requests=min(requests or MAX_REQUESTS, MAX_REQUESTS), seed=seed
-        )
+        target = min(int(requests), MAX_REQUESTS) if requests is not None else None
+        specs = expand_requests(pack, requests=target, seed=seed)
         return {
             "pack_id": pack["id"],
             "display_name": pack.get("display_name"),
@@ -112,9 +111,7 @@ class DemoRunner:
         traffic_key = (traffic or "sequential").lower()
         conc = concurrency if concurrency is not None else TRAFFIC_CONCURRENCY.get(traffic_key, 1)
         conc = max(1, min(int(conc), MAX_CONCURRENCY))
-        max_req = min(int(requests) if requests else MAX_REQUESTS, MAX_REQUESTS)
-        if pack.get("generate_count") and not requests:
-            max_req = min(int(pack["generate_count"]), MAX_REQUESTS)
+        target = min(int(requests), MAX_REQUESTS) if requests is not None else None
 
         use_mock = self.mock if mock is None else mock
         # CI defaults to mock when services unavailable
@@ -143,7 +140,7 @@ class DemoRunner:
             ),
         }
 
-        specs = expand_requests(pack, max_requests=max_req, seed=seed)
+        specs = expand_requests(pack, requests=target, seed=seed)
         # Pre-build request shells
         for spec in specs:
             run.requests.append(

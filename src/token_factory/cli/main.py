@@ -912,7 +912,9 @@ def ui() -> None:
 def demo_plan(
     pack: str = typer.Option("smoke", "--pack", "-p", help="Scenario pack id"),
     seed: int | None = typer.Option(None, "--seed", help="Seed for mixed packs"),
-    requests: int | None = typer.Option(None, "--requests", help="Max planned requests"),
+    requests: int | None = typer.Option(
+        None, "--requests", help="Target request count (packs cycle/expand to fill; ≤8000)"
+    ),
     json_out: bool = typer.Option(False, "--json"),
 ) -> None:
     """Dry-run: show scenarios / expected policy tendencies without sending traffic."""
@@ -968,7 +970,9 @@ def demo_run_cmd(
     traffic: str = typer.Option(
         "sequential", "--traffic", "-t", help="sequential|low|medium|high|mixed"
     ),
-    requests: int | None = typer.Option(None, "--requests", help="Max requests (≤8000)"),
+    requests: int | None = typer.Option(
+        None, "--requests", help="Target request count (packs cycle/expand to fill; ≤8000)"
+    ),
     concurrency: int | None = typer.Option(
         None, "--concurrency", "-c", help="Bounded concurrency (≤10)"
     ),

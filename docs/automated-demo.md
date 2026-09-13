@@ -67,6 +67,15 @@ Declarative YAML under `demo/scenarios/`:
 
 Expectations prefer soft eligibility (capability, family tendency, production-eligible) over brittle exact model×HW matches.
 
+### Request count (`--requests` / UI “Requests to run”)
+
+`--requests N` (and the UI control) is a **target workload size**, not merely a ceiling on a tiny pack:
+
+- **Mixed** packs (`mix` / `generate_count`, e.g. `enterprise-mixed`): generate **N** weighted samples. Pack YAML `generate_count` is the **default** when `--requests` is omitted.
+- **Fixed** packs (`smoke`, `executive`, …): cycle the scenario list (stable prompt variants via index) until **N** requests, so any pack can drive a longer Grafana demo.
+
+Always clamped to **8000**. Default in the UI is 40.
+
 ## CLI
 
 ```bash
@@ -77,6 +86,10 @@ token-factory demo run --pack executive --mock
 token-factory demo run --pack enterprise-mixed --seed 42 --mock
 token-factory demo run --pack observability --mock
 token-factory demo run --pack fallback --mock
+
+# Target request count (cycle/expand pack to fill)
+token-factory demo run --pack enterprise-mixed --requests 500 --seed 42 --mock --traffic medium
+token-factory demo run --pack smoke --requests 200 --mock
 
 # Failure injection (runtime overlay only)
 token-factory demo run --pack smoke --inject preferred-endpoint-unavailable --mock
@@ -93,7 +106,7 @@ Artifacts: `generated/demo-runs/<run-id>.json`
 
 Tab order: **Playground | Automated Demo | AMD Routing Matrix | …**
 
-Controls: pack, lifecycle, traffic profile, failure-injection checkboxes, Run Demo.
+Controls: pack, lifecycle, traffic profile, failure-injection checkboxes, **Requests to run** (target count; packs cycle/expand to fill), planned-count preview, Run Demo.
 
 Sections: Run Summary, Current Request, Live feed, routing/model/use-case **distributions** (coverage, not performance), Validation results, Observability links, recent run history.
 
@@ -128,6 +141,6 @@ Demo-only overlay (never mutates canonical policy or on-disk endpoints):
 
 ## Safety
 
-- Max requests per run: **8000**
+- Max requests per run: **8000** (target count; packs cycle/expand up to this bound)
 - Max concurrency: **10**
 - Not a stress-testing or benchmark platform

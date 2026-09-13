@@ -164,12 +164,57 @@ def test_normalize_injections():
 
 def test_seed_reproducibility_enterprise_mixed():
     pack = load_pack("enterprise-mixed")
-    a = expand_requests(pack, seed=42, max_requests=20)
-    b = expand_requests(pack, seed=42, max_requests=20)
-    c = expand_requests(pack, seed=99, max_requests=20)
+    a = expand_requests(pack, seed=42, requests=20)
+    b = expand_requests(pack, seed=42, requests=20)
+    c = expand_requests(pack, seed=99, requests=20)
+    assert len(a) == 20
     assert [x["scenario_id"] for x in a] == [x["scenario_id"] for x in b]
     assert [x["prompt"] for x in a] == [x["prompt"] for x in b]
     assert [x["scenario_id"] for x in a] != [x["scenario_id"] for x in c]
+
+
+def test_mixed_requests_drives_generate_count():
+    """CLI/UI --requests N expands mixed packs to N (generate_count is default only)."""
+    pack = load_pack("enterprise-mixed")
+    assert int(pack.get("generate_count") or 0) == 40
+    defaulted = expand_requests(pack, seed=7)
+    assert len(defaulted) == 40
+    expanded = expand_requests(pack, seed=7, requests=200)
+    assert len(expanded) == 200
+    # Same seed ⇒ shared prefix with default run
+    assert [x["scenario_id"] for x in expanded[:40]] == [x["scenario_id"] for x in defaulted]
+    # Alias max_requests still works
+    via_alias = expand_requests(pack, seed=7, max_requests=55)
+    assert len(via_alias) == 55
+
+
+def test_fixed_pack_cycles_to_requests():
+    """Fixed packs repeat scenarios until target N for long Grafana demos."""
+    pack = load_pack("smoke")
+    once = expand_requests(pack)
+    n_base = len(once)
+    assert 8 <= n_base <= 12
+    target = n_base * 3 + 2
+    cycled = expand_requests(pack, requests=target)
+    assert len(cycled) == target
+    # Cycles scenario list in order
+    for i, spec in enumerate(cycled):
+        assert spec["scenario_id"] == once[i % n_base]["scenario_id"]
+    # Prompt variants rotate stably when a scenario has multiple prompts
+    by_id = {s["id"]: s for s in pack["scenarios"]}
+    for i, spec in enumerate(cycled):
+        sc = by_id[spec["scenario_id"]]
+        prompts = (sc.get("request") or {}).get("prompts")
+        if prompts and len(prompts) > 1:
+            assert spec["prompt"] == prompts[i % len(prompts)]
+
+
+def test_plan_respects_target_requests():
+    plan = DemoRunner(mock=True).plan("enterprise-mixed", seed=1, requests=75)
+    assert plan["planned_requests"] == 75
+    plan_smoke = DemoRunner(mock=True).plan("smoke", requests=50)
+    assert plan_smoke["planned_requests"] == 50
+
 
 
 def test_observability_metadata_to_instrumentor():

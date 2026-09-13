@@ -90,7 +90,14 @@ def render_automated_demo_tab(
     with r1:
         seed = st.number_input("Seed (mixed packs)", min_value=0, value=42, step=1)
     with r2:
-        req_limit = st.number_input("Max requests", min_value=1, max_value=8000, value=40, step=1)
+        req_limit = st.number_input(
+            "Requests to run",
+            min_value=1,
+            max_value=8000,
+            value=40,
+            step=1,
+            help="Target request count; packs cycle or expand (mixed) to fill. Max 8000.",
+        )
     with r3:
         force_mock = st.checkbox(
             "Use mock adapters (no cluster)",
@@ -101,6 +108,16 @@ def render_automated_demo_tab(
     pack_meta = packs.get(pack_id) or {}
     if pack_meta.get("description"):
         st.caption(pack_meta["description"][:280])
+
+    try:
+        plan_preview = DemoRunner(mock=True).plan(
+            pack_id, seed=int(seed), requests=int(req_limit)
+        )
+        planned_n = plan_preview.get("planned_requests", int(req_limit))
+        pack_name = plan_preview.get("display_name") or pack_id
+        st.info(f"Will run **{planned_n}** requests from pack **{pack_name}** (`{pack_id}`).")
+    except Exception as exc:
+        st.warning(f"Could not preview plan: {exc}")
 
     run_clicked = st.button("Run Demo", type="primary")
 

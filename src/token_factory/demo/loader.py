@@ -10,6 +10,9 @@ import yaml
 from token_factory.demo.schema import ScenarioSchemaError, assert_valid_pack
 from token_factory.runtime.paths import repo_root
 
+# Keep in sync with runner.MAX_REQUESTS (avoid circular import).
+_MAX_REQUESTS = 8000
+
 
 def scenarios_dir() -> Path:
     return repo_root() / "demo" / "scenarios"
@@ -62,63 +65,100 @@ def load_pack(pack_id: str, *, path: Path | None = None) -> dict[str, Any]:
 def expand_requests(
     pack: dict[str, Any],
     *,
-    max_requests: int = 8000,
+    requests: int | None = None,
     seed: int | None = None,
+    max_requests: int | None = None,
 ) -> list[dict[str, Any]]:
     """Expand pack scenarios into concrete request specs (deterministic).
 
-    - Fixed scenarios with ``prompt`` emit one request each.
-    - Scenarios with ``prompts`` pick the first (or seeded) variant.
-    - Packs with ``mix`` + ``generate_count`` synthesize additional requests
-      from scenario templates matching mix weights (enterprise-mixed).
+    ``requests`` is the **target** workload size (clamped to ``_MAX_REQUESTS``).
+
+    - **Mixed** packs (``mix`` present): generate ``n`` weighted samples.
+      Pack YAML ``generate_count`` is the default when ``requests`` is omitted —
+      not a hard cap when UI/CLI passes ``N``.
+    - **Fixed** packs: emit each scenario once when ``requests`` is omitted;
+      when ``requests=N``, cycle the scenario list (varying prompt index when
+      multiple prompts exist) until ``N`` requests.
+
+    ``max_requests`` is accepted as a deprecated alias for ``requests``.
     """
-    import random
+    if requests is None and max_requests is not None:
+        requests = max_requests
 
-    rng = random.Random(seed)
     scenarios = list(pack.get("scenarios") or [])
-    generate_count = pack.get("generate_count")
+    if not scenarios:
+        return []
+
     mix = pack.get("mix")
+    generate_count = pack.get("generate_count")
 
+    if mix:
+        import random
+
+        rng = random.Random(seed)
+        if requests is not None:
+            n = min(int(requests), _MAX_REQUESTS)
+        else:
+            default_n = int(generate_count) if generate_count else len(scenarios)
+            n = min(default_n, _MAX_REQUESTS)
+        return _expand_mixed(scenarios, mix=mix, n=n, rng=rng)
+
+    if requests is not None:
+        n = min(int(requests), _MAX_REQUESTS)
+        return _expand_fixed_cycled(scenarios, n=n)
+
+    return [_materialize(sc, index=i) for i, sc in enumerate(scenarios)]
+
+
+def _expand_mixed(
+    scenarios: list[dict[str, Any]],
+    *,
+    mix: dict[str, Any],
+    n: int,
+    rng: Any,
+) -> list[dict[str, Any]]:
+    by_key: dict[str, list[dict[str, Any]]] = {}
+    for sc in scenarios:
+        key = (
+            (sc.get("request") or {}).get("use_case_hint")
+            or (sc.get("expected") or {}).get("classification", {}).get("use_case")
+            or sc.get("mix_key")
+            or sc.get("id")
+        )
+        by_key.setdefault(str(key), []).append(sc)
+    keys = list(mix.keys())
+    weights = [float(mix[k]) for k in keys]
     concrete: list[dict[str, Any]] = []
+    for i in range(n):
+        pick = rng.choices(keys, weights=weights, k=1)[0]
+        pool = by_key.get(pick) or scenarios
+        sc = rng.choice(pool)
+        concrete.append(_materialize(sc, index=i))
+    return concrete
 
-    if mix and generate_count:
-        # Weighted sampling from scenarios that declare use_case_hint / mix_key
-        by_key: dict[str, list[dict[str, Any]]] = {}
-        for sc in scenarios:
-            key = (
-                (sc.get("request") or {}).get("use_case_hint")
-                or (sc.get("expected") or {}).get("classification", {}).get("use_case")
-                or sc.get("mix_key")
-                or sc.get("id")
-            )
-            by_key.setdefault(str(key), []).append(sc)
-        keys = list(mix.keys())
-        weights = [float(mix[k]) for k in keys]
-        n = min(int(generate_count), max_requests)
-        for i in range(n):
-            pick = rng.choices(keys, weights=weights, k=1)[0]
-            pool = by_key.get(pick) or scenarios
-            sc = rng.choice(pool)
-            concrete.append(_materialize(sc, rng=rng, index=i))
-        return concrete[:max_requests]
 
-    for i, sc in enumerate(scenarios):
-        if len(concrete) >= max_requests:
-            break
-        concrete.append(_materialize(sc, rng=rng, index=i))
+def _expand_fixed_cycled(
+    scenarios: list[dict[str, Any]],
+    *,
+    n: int,
+) -> list[dict[str, Any]]:
+    concrete: list[dict[str, Any]] = []
+    for i in range(n):
+        sc = scenarios[i % len(scenarios)]
+        concrete.append(_materialize(sc, index=i))
     return concrete
 
 
 def _materialize(
     sc: dict[str, Any],
     *,
-    rng: Any,
     index: int,
 ) -> dict[str, Any]:
     req = dict(sc.get("request") or {})
     prompts = req.get("prompts")
     if prompts and isinstance(prompts, list) and prompts:
-        prompt = prompts[rng.randrange(len(prompts))] if len(prompts) > 1 else prompts[0]
+        # Stable cycling across repeats (index % len); mixed scenario picks use seed.
+        prompt = prompts[index % len(prompts)]
     else:
         prompt = req.get("prompt") or ""
     return {
