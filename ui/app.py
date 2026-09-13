@@ -546,7 +546,10 @@ def resolve_aim_target(
     return url, str(model_id), str(matched.get("name") or decision or "route")
 
 
-def _iter_sse_text(response: httpx.Response, meta: dict[str, Any]) -> Iterator[str]:
+def _iter_sse_parts(
+    response: httpx.Response, meta: dict[str, Any]
+) -> Iterator[tuple[str, str]]:
+    """Yield ``(kind, text)`` where kind is ``reasoning`` or ``content``."""
     for line in response.iter_lines():
         if not line:
             continue
@@ -568,23 +571,29 @@ def _iter_sse_text(response: httpx.Response, meta: dict[str, Any]) -> Iterator[s
         if choice.get("finish_reason"):
             meta["finish"] = choice["finish_reason"]
         delta = choice.get("delta") or {}
-        text = delta.get("content") or delta.get("reasoning") or ""
-        if not text:
-            continue
-        if delta.get("content"):
-            meta["saw_content"] = True
-        elif delta.get("reasoning"):
+        reasoning = delta.get("reasoning") or ""
+        content = delta.get("content") or ""
+        if reasoning:
             meta["saw_reasoning"] = True
+            yield ("reasoning", reasoning)
+        if content:
+            meta["saw_content"] = True
+            yield ("content", content)
+
+
+def _iter_sse_text(response: httpx.Response, meta: dict[str, Any]) -> Iterator[str]:
+    """Merged text stream (reasoning then content per chunk) for legacy callers."""
+    for _kind, text in _iter_sse_parts(response, meta):
         yield text
 
 
-def stream_from_aim(
+def stream_from_aim_parts(
     prompt: str,
     chat_url: str,
     model_id: str,
     meta: dict[str, Any],
-) -> Iterator[str]:
-    """True progressive SSE from an OpenAI-compatible AIM endpoint."""
+) -> Iterator[tuple[str, str]]:
+    """True progressive SSE parts from an OpenAI-compatible AIM endpoint."""
     meta["stream_path"] = "direct-aim"
     with httpx.stream(
         "POST",
@@ -600,15 +609,26 @@ def stream_from_aim(
         if response.status_code >= 400:
             body = response.read().decode("utf-8", errors="replace")[:500]
             raise RuntimeError(f"AIM HTTP {response.status_code}: {body}")
-        yield from _iter_sse_text(response, meta)
+        yield from _iter_sse_parts(response, meta)
 
 
-def stream_via_gateway(
+def stream_from_aim(
+    prompt: str,
+    chat_url: str,
+    model_id: str,
+    meta: dict[str, Any],
+) -> Iterator[str]:
+    """True progressive SSE from an OpenAI-compatible AIM endpoint."""
+    for _kind, text in stream_from_aim_parts(prompt, chat_url, model_id, meta):
+        yield text
+
+
+def stream_via_gateway_parts(
     prompt: str,
     model: str,
     meta: dict[str, Any],
-) -> Iterator[str]:
-    """Gateway path — often buffered until generation completes (slow TTFT)."""
+) -> Iterator[tuple[str, str]]:
+    """Gateway path parts — often buffered until generation completes (slow TTFT)."""
     meta["stream_path"] = "gateway"
     with httpx.stream(
         "POST",
@@ -627,26 +647,37 @@ def stream_via_gateway(
             raise RuntimeError(f"HTTP {response.status_code}: {body}")
 
         last_arrive = time.perf_counter()
-        for text in _iter_sse_text(response, meta):
+        for kind, text in _iter_sse_parts(response, meta):
             now = time.perf_counter()
             gap = now - last_arrive
             last_arrive = now
             if gap < 0.005:
                 meta["gateway_buffered"] = True
                 time.sleep(min(0.028, 0.008 + len(text) * 0.003))
-            yield text
+            yield (kind, text)
 
 
-def stream_chat_completion(
+def stream_via_gateway(
+    prompt: str,
+    model: str,
+    meta: dict[str, Any],
+) -> Iterator[str]:
+    """Gateway path — often buffered until generation completes (slow TTFT)."""
+    for _kind, text in stream_via_gateway_parts(prompt, model, meta):
+        yield text
+
+
+def stream_chat_completion_parts(
     prompt: str,
     model: str,
     meta: dict[str, Any],
     ui_meta: dict[str, Any],
     sr_api: str,
     on_event: Any | None = None,
-) -> Iterator[str]:
+) -> Iterator[tuple[str, str]]:
     """Prefer SR classify → direct AIM stream (live TTFT); fall back to gateway.
 
+    Yields ``(kind, text)`` with kind ``reasoning`` or ``content``.
     Optional ``on_event(name, payload)`` fires at real request stages (no fake timers):
     classifying | classified | streaming | fallback.
     """
@@ -685,14 +716,29 @@ def stream_chat_completion(
             )
             meta["stream_path"] = "direct-aim"
             _emit("streaming", {"stream_path": "direct-aim"})
-            yield from stream_from_aim(prompt, chat_url, model_id, meta)
+            yield from stream_from_aim_parts(prompt, chat_url, model_id, meta)
             return
         except Exception as exc:
             meta["direct_error"] = str(exc)[:200]
             _emit("fallback", {"reason": meta["direct_error"]})
     meta["stream_path"] = "gateway"
     _emit("streaming", {"stream_path": "gateway"})
-    yield from stream_via_gateway(prompt, model, meta)
+    yield from stream_via_gateway_parts(prompt, model, meta)
+
+
+def stream_chat_completion(
+    prompt: str,
+    model: str,
+    meta: dict[str, Any],
+    ui_meta: dict[str, Any],
+    sr_api: str,
+    on_event: Any | None = None,
+) -> Iterator[str]:
+    """String stream wrapper around :func:`stream_chat_completion_parts`."""
+    for _kind, text in stream_chat_completion_parts(
+        prompt, model, meta, ui_meta, sr_api, on_event=on_event
+    ):
+        yield text
 
 
 def chat_completion(prompt: str, model: str) -> dict[str, Any]:
@@ -765,7 +811,7 @@ with tab_chat:
         direct_stream=DIRECT_STREAM,
         probe_defs=probe_defs,
         probe=probe,
-        stream_chat_completion=stream_chat_completion,
+        stream_chat_completion_parts=stream_chat_completion_parts,
         chat_completion=chat_completion,
         extract_reply=extract_reply,
         html=html,

@@ -13,7 +13,7 @@ _UI_ROOT = Path(__file__).resolve().parents[1]
 if str(_UI_ROOT) not in sys.path:
     sys.path.insert(0, str(_UI_ROOT))
 
-from components.request_state import (
+from components.request_state import (  # noqa: E402
     RequestState,
     apply_classify,
     apply_resolved_route,
@@ -27,11 +27,11 @@ from components.request_state import (
     mark_streaming,
     new_request_state,
 )
-from components.route_flow import render_route_flow_html
-from components.route_inspector import render_route_inspector
+from components.route_flow import render_route_flow_html  # noqa: E402
+from components.route_inspector import render_route_inspector  # noqa: E402
 
 HtmlFn = Callable[[str], None]
-StreamFn = Callable[..., Iterator[str]]
+StreamPartsFn = Callable[..., Iterator[tuple[str, str]]]
 ChatFn = Callable[[str, str], dict[str, Any]]
 ExtractFn = Callable[[dict[str, Any]], str]
 ProbeFn = Callable[[str, str], str]
@@ -353,12 +353,62 @@ PLAYGROUND_CSS = """
   margin-top: 0 !important;
   margin-bottom: 0 !important;
 }
+
+/* Thinking / reasoning pane (Playground only) */
+.tf-pg-thinking {
+  margin: 0 0 0.55rem;
+  border: 1px solid var(--tf-border);
+  border-radius: 0.4rem;
+  background: rgba(255,255,255,0.03);
+  overflow: hidden;
+}
+.tf-pg-thinking-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--tf-muted);
+  padding: 0.35rem 0.55rem 0.1rem;
+  font-weight: 600;
+}
+.tf-pg-thinking-body {
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 0.2rem 0.55rem 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--tf-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  scroll-behavior: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tf-pg-thinking-body { scroll-behavior: auto; }
+}
 </style>
 """
 
 
 def _esc(value: Any) -> str:
     return html_lib.escape("" if value is None else str(value))
+
+
+def _thinking_box_html(text: str) -> str:
+    """Labeled thinking pane with instant auto-scroll to bottom (no smooth scroll)."""
+    body = _esc(text)
+    return (
+        '<div class="tf-pg-thinking" role="region" aria-label="Thinking">'
+        '<div class="tf-pg-thinking-label">Thinking</div>'
+        f'<div class="tf-pg-thinking-body" id="tf-pg-thinking-scroll">{body}</div>'
+        "</div>"
+        "<script>"
+        "(function(){"
+        "var el=document.getElementById('tf-pg-thinking-scroll');"
+        "if(!el)return;"
+        "el.scrollTop=el.scrollHeight;"
+        "})();"
+        "</script>"
+    )
 
 
 def _health_class(value: str) -> str:
@@ -431,7 +481,7 @@ def render_playground_tab(
     direct_stream: bool,
     probe_defs: list[tuple[str, str, str]],
     probe: ProbeFn,
-    stream_chat_completion: StreamFn,
+    stream_chat_completion_parts: StreamPartsFn,
     chat_completion: ChatFn,
     extract_reply: ExtractFn,
     html: HtmlFn,
@@ -492,6 +542,10 @@ def render_playground_tab(
                 )
             for msg in st.session_state.messages:
                 with st.chat_message(msg["role"]):
+                    reasoning = (msg.get("reasoning") or "").strip()
+                    if reasoning:
+                        with st.expander("Thinking", expanded=False):
+                            html(_thinking_box_html(reasoning))
                     st.markdown(msg["content"])
                     if msg.get("meta"):
                         st.caption(msg["meta"])
@@ -544,6 +598,8 @@ def render_playground_tab(
         }
         status = st.empty()
         status.caption("Classifying intent…")
+        thinking_slot = st.empty()
+        answer_slot = st.empty()
 
         def on_event(name: str, payload: dict[str, Any]) -> None:
             nonlocal state
@@ -586,36 +642,45 @@ def render_playground_tab(
             _paint_flow()
 
         try:
+            reasoning_chunks: list[str] = []
+            content_chunks: list[str] = []
+            first = True
+            saw_token = False
 
-            def _stream() -> Iterator[str]:
-                first = True
-                saw_token = False
-                for piece in stream_chat_completion(
-                    prompt,
-                    virtual_model,
-                    stream_meta,
-                    meta,
-                    sr_api,
-                    on_event=on_event,
-                ):
-                    if first:
-                        status.empty()
-                        first = False
-                    if not saw_token:
-                        saw_token = True
-                        content = bool(stream_meta.get("saw_content"))
-                        reasoning = bool(stream_meta.get("saw_reasoning"))
-                        mark_first_token(state, content=content or not reasoning)
-                        st.session_state.pg_request = state
-                        _paint_flow()
-                    elif stream_meta.get("saw_content") and not state.saw_content:
-                        mark_first_token(state, content=True)
-                        st.session_state.pg_request = state
-                        _paint_flow()
-                    yield piece
+            for kind, piece in stream_chat_completion_parts(
+                prompt,
+                virtual_model,
+                stream_meta,
+                meta,
+                sr_api,
+                on_event=on_event,
+            ):
+                if first:
+                    status.empty()
+                    first = False
+                if not saw_token:
+                    saw_token = True
+                    content = bool(stream_meta.get("saw_content"))
+                    reasoning = bool(stream_meta.get("saw_reasoning"))
+                    mark_first_token(state, content=content or not reasoning)
+                    st.session_state.pg_request = state
+                    _paint_flow()
+                elif stream_meta.get("saw_content") and not state.saw_content:
+                    mark_first_token(state, content=True)
+                    st.session_state.pg_request = state
+                    _paint_flow()
 
-            reply = st.write_stream(_stream())
-            if not (reply or "").strip():
+                if kind == "reasoning":
+                    reasoning_chunks.append(piece)
+                    thinking_slot.html(_thinking_box_html("".join(reasoning_chunks)))
+                else:
+                    content_chunks.append(piece)
+                    answer_slot.markdown("".join(content_chunks))
+
+            reply = "".join(content_chunks)
+            reasoning_text = "".join(reasoning_chunks)
+
+            if not reply.strip():
                 status.empty()
                 body = chat_completion(prompt, virtual_model)
                 reply = extract_reply(body)
@@ -626,7 +691,7 @@ def render_playground_tab(
                 stream_meta["stream_path"] = stream_meta.get("stream_path") or "gateway"
                 if not state.stream_path:
                     mark_streaming(state, "gateway")
-                st.markdown(reply)
+                answer_slot.markdown(reply)
 
             state.model = stream_meta.get("model") or state.model
             state.finish = stream_meta.get("finish")
@@ -644,9 +709,14 @@ def render_playground_tab(
             mark_complete(state)
             meta_line = caption_line(state)
             st.caption(meta_line)
-            st.session_state.messages.append(
-                {"role": "assistant", "content": reply, "meta": meta_line}
-            )
+            stored: dict[str, Any] = {
+                "role": "assistant",
+                "content": reply,
+                "meta": meta_line,
+            }
+            if reasoning_text.strip():
+                stored["reasoning"] = reasoning_text
+            st.session_state.messages.append(stored)
             st.session_state.pg_request = state
             _paint_flow()
             st.rerun()
