@@ -42,4 +42,6 @@ if [[ "${SKIP_OBSERVABILITY}" != "true" ]]; then
 fi
 
 step "Installation complete"
-info "Next: make ports (or token-factory ports start)"
+info "Next: make ports  # gateway :18080, SR API :8081, dashboard :8700"
+info "Then:  make ui    # Playground live AIM stream on :8501"
+info "Smoke: make smoke-ui"
