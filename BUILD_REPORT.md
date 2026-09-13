@@ -94,17 +94,15 @@ Single source of truth: `config/endpoints.yaml` + `config/policies.yaml` → `to
 
 ## MI300X environment
 
-Discovery via **public HTTP only** (SSH failed — no `eai_ed25519` key on build host).
+SSH inventory completed with local key `~/.ssh/eai_ed25519` (**not committed**).
 
-| Node (IP) | Port | Workload | Notes |
-|-----------|------|----------|-------|
-| 129.212.183.201 | 8000 | vLLM `openai/gpt-oss-120b` | Healthy; coding + math/reasoning routes |
-| 165.245.136.245 | 8000 | vLLM `openai/gpt-oss-20b` | Healthy; general routes |
-| 165.245.133.102 | 8080 | Legacy eai/SR demo (`MoM`, `vllm-sr/auto`) | Port 8000 closed; **not** Token Factory foundation |
+| Node | Role | OS / GPU | AIM (image 0.11.1) | API |
+|------|------|----------|--------------------|-----|
+| 165.245.133.102 | Legacy eai kind + Llama AIM (kind net only) | Ubuntu 24.04, MI300X VF, ROCm 7.2.4 | `aim-meta-llama-llama-3-3-70b-instruct` → `amd/Llama-3.3-70B-Instruct-FP8-KV` | On-node `172.18.0.5:8000`; host `:8080` is eai gateway PF. Public `:8000` blocked by cloud firewall |
+| 129.212.183.201 | Coding / reasoning | Ubuntu 24.04, MI300X VF | `aim-openai-gpt-oss-120b` → `openai/gpt-oss-120b` | **:8000 public** |
+| 165.245.136.245 | General | Ubuntu 24.04, MI300X VF | `aim-openai-gpt-oss-20b` → `openai/gpt-oss-20b` | **:8000 public** |
 
-Kind cluster `token-factory` runs the control plane only; inference runs on external MI300X nodes.
-
----
+Token Factory control plane runs on local kind, not on these nodes. Node A still hosts the separate `eai-sr-demo` kind cluster — left intact.
 
 ## Models
 

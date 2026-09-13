@@ -37,3 +37,8 @@ Thumbs.db
 # Helm/K8s temp
 *.tgz
 /tmp/
+
+# SSH keys — never commit
+eai_ed25519
+*.pem
+.id_ed25519*
