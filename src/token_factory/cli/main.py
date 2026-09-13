@@ -9,6 +9,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import httpx
 import typer
@@ -39,6 +40,8 @@ from token_factory.runtime.port_forward import (
 from token_factory.version import PINNED_VERSIONS, VIRTUAL_MODEL
 
 app = typer.Typer(name="token-factory", help="AMD Token Factory reference architecture CLI")
+policy_app = typer.Typer(help="AMD Canonical Routing Policy commands")
+app.add_typer(policy_app, name="policy")
 console = Console()
 
 
@@ -510,6 +513,286 @@ def recommend(
             console.print("\n[bold]Currently deployed eligible:[/bold]")
             for d in deployed[:5]:
                 console.print(f"  • {d['model']} × {d['compute']} ({d.get('endpoint_id')})")
+
+
+@policy_app.command("validate")
+def policy_validate(
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Validate canonical AMD routing policy + profile overlays."""
+    from token_factory.policy import (
+        list_profiles,
+        load_canonical_policy,
+        load_profile,
+        validate_canonical_policy,
+    )
+    from token_factory.policy.schema import validate_profile_overlay
+    from token_factory.routing_matrix.loader import load_routing_bundle
+
+    bundle = load_routing_bundle()
+    policy = load_canonical_policy()
+    use_case_ids = {u["id"] for u in bundle["use_cases"].get("use_cases") or []}
+    compute_ids = {c["id"] for c in bundle["compute"].get("compute") or []}
+    errors = validate_canonical_policy(
+        policy,
+        use_case_ids=use_case_ids,
+        compute_ids=compute_ids,
+        strict=False,
+    )
+    for p in list_profiles():
+        errors.extend(
+            [f"profile {p['id']}: {e}" for e in validate_profile_overlay(load_profile(p["id"]))]
+        )
+    payload = {
+        "ok": not errors,
+        "source": policy.get("_source_path"),
+        "version": (policy.get("metadata") or {}).get("amd_routing_policy", {}).get("version"),
+        "errors": errors,
+    }
+    if json_out:
+        console.print_json(data=payload)
+        if errors:
+            raise typer.Exit(1)
+        return
+    if errors:
+        for err in errors:
+            console.print(f"[red]ERROR:[/red] {err}")
+        raise typer.Exit(1)
+    console.print(
+        f"[green]Policy valid[/green] · {payload['source']} · v{payload['version']}"
+    )
+
+
+@policy_app.command("show")
+def policy_show(
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Show high-level canonical policy metadata."""
+    from token_factory.policy import list_profiles, load_canonical_policy, policy_ui_metadata
+
+    policy = load_canonical_policy()
+    meta = policy_ui_metadata()
+    nested = policy.get("_canonical") or policy.get("policy") or {}
+    payload = {
+        "id": meta.get("id"),
+        "display_name": meta.get("display_name"),
+        "version": meta.get("version"),
+        "published": meta.get("published"),
+        "source_path": meta.get("source_path"),
+        "active_profile": meta.get("active_profile"),
+        "virtual_model": meta.get("virtual_model"),
+        "counts": meta.get("counts"),
+        "inputs": nested.get("inputs") if isinstance(nested, dict) else meta.get("inputs"),
+        "profiles": [p["id"] for p in list_profiles()],
+        "decision_pipeline": meta.get("decision_pipeline"),
+    }
+    if json_out:
+        console.print_json(data=payload)
+        return
+    console.print(
+        Panel.fit(
+            f"[bold]{payload['display_name']}[/bold]\n"
+            f"Version  {payload['version']} · published {payload['published']}\n"
+            f"Source   {payload['source_path']}\n"
+            f"Profile  {payload['active_profile']} · virtual {payload['virtual_model']}"
+        )
+    )
+    counts = payload.get("counts") or {}
+    table = Table(title="Counts")
+    table.add_column("Metric")
+    table.add_column("Value")
+    for k, v in counts.items():
+        table.add_row(k, str(v))
+    console.print(table)
+
+
+@policy_app.command("explain")
+def policy_explain(
+    use_case: str = typer.Option(..., "--use-case", "-u"),
+    objective: str | None = typer.Option(None, "--objective", "-o"),
+    serving_pattern: str | None = typer.Option(None, "--serving-pattern", "-S"),
+    traffic: str = typer.Option("medium", "--traffic", "-t"),
+    lifecycle: str = typer.Option("production", "--lifecycle", "-L"),
+    deployment: str | None = typer.Option(None, "--deployment"),
+    data_locality: bool = typer.Option(False, "--data-locality"),
+    profile: str | None = typer.Option(None, "--profile"),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Explain Policy — seven steps from the canonical recommendation engine."""
+    from token_factory.policy import explain_policy
+
+    result = explain_policy(
+        use_case,
+        objective=objective,
+        serving_pattern=serving_pattern,
+        traffic=traffic,
+        lifecycle=lifecycle,
+        deployment=deployment,
+        data_locality=data_locality,
+        profile=profile,
+    )
+    if json_out:
+        console.print_json(data=result)
+        return
+    console.print(
+        Panel.fit(
+            f"[bold]EXPLAIN POLICY[/bold] · v{result.get('policy_version')}\n"
+            f"Use case   {result['use_case']['display_name']} ({result['use_case']['id']})\n"
+            f"Objective  {result['objective']} · serving {result['serving_pattern']}\n"
+            f"Traffic    {result['traffic']} · lifecycle {result['lifecycle_mode']}"
+        )
+    )
+    for step in result.get("steps") or []:
+        console.print(f"\n[cyan]Step {step['step']} — {step['title']}[/cyan]")
+        if step["step"] == 1:
+            console.print(f"  required: {step.get('required')} · floor: {step.get('capability_floor')}")
+        elif step["step"] == 2:
+            console.print(
+                f"  lifecycle={step.get('lifecycle_mode')} allow={step.get('allowed_lifecycles')} "
+                f"exclusions={step.get('lifecycle_exclusions')}"
+            )
+        elif step["step"] == 3:
+            for note in (step.get("notes") or [])[:3]:
+                console.print(f"  • {note[:140]}")
+        elif step["step"] == 4:
+            console.print(f"  objective={step.get('objective')} · label={step.get('preference_label')}")
+        elif step["step"] == 5:
+            for c in (step.get("candidates") or [])[:5]:
+                console.print(
+                    f"  {c.get('rank') or '-':>2}  {c['model']:<42} {c['compute']:<10} {c['recommendation']}"
+                )
+        elif step["step"] == 6:
+            sel = step.get("selected_runtime_route")
+            console.print(f"  selected: {sel or 'none'}")
+            console.print(f"  [dim]{step.get('explanation')}[/dim]")
+        elif step["step"] == 7:
+            for rule in (step.get("canonical_rules") or [])[:4]:
+                console.print(f"  • {rule}")
+            chain = step.get("profile_fallback_chain") or []
+            if chain:
+                console.print(f"  V1 chain: {' → '.join(chain)}")
+
+
+@policy_app.command("coverage")
+def policy_coverage_cmd(
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Show use-case policy coverage and explicit gaps."""
+    from token_factory.policy import policy_coverage
+
+    result = policy_coverage()
+    if json_out:
+        console.print_json(data=result)
+        return
+    counts = result["counts"]
+    console.print(
+        Panel.fit(
+            f"[bold]AMD ROUTING POLICY {result.get('policy_version')}[/bold]\n"
+            f"Use cases             {counts['use_cases']}\n"
+            f"Objectives            {counts['objectives']}\n"
+            f"Serving patterns      {counts['serving_patterns']}\n"
+            f"Compute targets       {counts['compute_targets']}\n"
+            f"Lifecycle modes       {counts['lifecycle_modes']}\n"
+            f"GA-capable            {counts['ga_capable']}\n"
+            f"Preview-only          {counts['preview_only']}\n"
+            f"Tech-preview-only     {counts['tech_preview_only']}\n"
+            f"No eligible candidate {counts['no_eligible_candidate']}"
+        )
+    )
+    gaps = result.get("gaps") or []
+    if gaps:
+        console.print("\n[bold]Gaps[/bold]")
+        for g in gaps:
+            console.print(f"  • {g['use_case']}: {g['reason']}")
+
+
+@policy_app.command("compile")
+def policy_compile_cmd(
+    profile: str | None = typer.Option(None, "--profile"),
+    use_case: str | None = typer.Option(None, "--use-case", "-u"),
+    objective: str | None = typer.Option(None, "--objective", "-o"),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Compile effective policy (+ optional ranked candidates) from canonical + profile."""
+    from token_factory.policy import compile_effective_policy
+
+    result = compile_effective_policy(
+        profile_name=profile, use_case=use_case, objective=objective
+    )
+    if json_out:
+        console.print_json(data=result)
+        return
+    meta = result["effective_policy"]
+    console.print(
+        Panel.fit(
+            f"[bold]Effective policy[/bold] v{meta.get('version')}\n"
+            f"Profile {meta.get('active_profile')} · routes {len(meta.get('compiled_routes') or [])}"
+        )
+    )
+    ranked = result.get("ranked_candidates")
+    if ranked:
+        for c in (ranked.get("ranked") or [])[:8]:
+            console.print(
+                f"  {c.get('rank') or '-':>2}  {c['model']:<42} {c['compute']:<10} {c['recommendation']}"
+            )
+
+
+@policy_app.command("export")
+def policy_export(
+    output: Path | None = typer.Option(None, "--output", "-o"),
+) -> None:
+    """Export canonical policy + UI metadata as JSON."""
+    from token_factory.policy import load_canonical_policy, policy_ui_metadata
+
+    payload = {
+        "canonical": load_canonical_policy(),
+        "ui": policy_ui_metadata(),
+    }
+    # Strip non-serializable path objects if any
+    text = json.dumps(payload, indent=2, default=str)
+    if output:
+        output.write_text(text, encoding="utf-8")
+        console.print(f"Wrote {output}")
+    else:
+        console.print(text)
+
+
+@policy_app.command("diff")
+def policy_diff(
+    left: str = typer.Option("amd-balanced", "--left"),
+    right: str = typer.Option("amd-enterprise", "--right"),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Compare two profile overlays (objective / lifecycle / fallback — not full matrices)."""
+    from token_factory.policy import load_profile
+
+    def _summary(name: str) -> dict[str, Any]:
+        doc = load_profile(name)
+        policy = doc.get("policy") or {}
+        overlay = doc.get("overlay") or policy.get("overlay") or {}
+        return {
+            "name": policy.get("name", name),
+            "priority_mode": policy.get("priority_mode"),
+            "objective": overlay.get("objective"),
+            "lifecycle_strictness": overlay.get("lifecycle_strictness"),
+            "economic_preference": overlay.get("economic_preference"),
+            "locality_preference": overlay.get("locality_preference"),
+            "fallback_chain": (policy.get("fallback") or {}).get("chain"),
+            "route_count": len(policy.get("routes") or []),
+        }
+
+    a, b = _summary(left), _summary(right)
+    payload = {"left": a, "right": b, "changed": {k: [a.get(k), b.get(k)] for k in a if a.get(k) != b.get(k)}}
+    if json_out:
+        console.print_json(data=payload)
+        return
+    table = Table(title=f"Profile diff: {left} vs {right}")
+    table.add_column("Field")
+    table.add_column(left)
+    table.add_column(right)
+    for k in a:
+        table.add_row(k, str(a.get(k)), str(b.get(k)))
+    console.print(table)
 
 
 @app.command()

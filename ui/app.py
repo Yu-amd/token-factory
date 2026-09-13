@@ -824,7 +824,7 @@ with tab_matrix:
         "(RELATIVE until measured). No fabricated $/token.",
         hero=True,
         meta=[
-            ("Policy", "amd-routing-policy v2.1"),
+            ("Policy", f"amd-routing-policy v{(meta.get('routing_matrix') or {}).get('policy_version') or '2.3'}"),
             ("Cost evidence", "RELATIVE (no fabricated $/token)"),
         ],
     )
@@ -1344,24 +1344,9 @@ with tab_inv:
     st.dataframe(meta.get("endpoints", []), width="stretch", hide_index=True)
 
 with tab_pol:
-    section(
-        "Policies",
-        "Active policy pack",
-        "Authoritative source under config/ and policies/.",
-    )
-    html(
-        f"""
-        <div class="tf-card">
-          <dl class="tf-kv">
-            <dt>Policy</dt><dd>{meta.get('policy_name', 'amd-balanced')}</dd>
-            <dt>Mode</dt><dd>{meta.get('priority_mode', 'balanced')}</dd>
-            <dt>Virtual model</dt><dd>{meta.get('virtual_model', VIRTUAL_MODEL)}</dd>
-            <dt>Routes</dt><dd>{len(meta.get('routes', []))}</dd>
-            <dt>Endpoints</dt><dd>{len(meta.get('endpoints', []))}</dd>
-          </dl>
-        </div>
-        """
-    )
+    from views.policies import render_policies_tab
+
+    render_policies_tab(meta, section=section, html=html)
 
 with tab_ops:
     dash = links.get("semantic_router_dashboard", "http://localhost:8700")

@@ -14,25 +14,31 @@ Token Factory implements AMD Enterprise AI **Mixture-of-Models** routing on Kube
 ## Single source of truth
 
 ```
-config/endpoints.yaml + policies/*.yaml + catalog/aims.yaml
+config/endpoints.yaml + policies/amd-policy.yaml + policies/profiles/*.yaml + catalog/aims.yaml
         │
         ▼
-  token-factory compile
+  token-factory compile  (+ token-factory policy compile)
         │
         ├── generated/semantic-router-values.yaml
         ├── generated/ai-gateway-manifests.yaml
-        └── generated/ui-metadata.json
+        └── generated/ui-metadata.json  (includes amd_policy for Policies tab)
 ```
 
 Clients call one virtual model: **`token-factory/auto`**.
 
 ## AMD Opinionated Routing (additive)
 
-Separate from the runtime gateway path: AIM catalog = **CAN RUN**, routing matrix =
-**SHOULD RUN**, endpoint inventory = **CAN ROUTE NOW**. See
-[amd-routing-matrix.md](amd-routing-matrix.md). Compile still emits V1 manifests plus
-light `routing_matrix` fields in `ui-metadata.json`.
+```text
+AIM CATALOG          = CAN RUN
+AMD CANONICAL POLICY = SHOULD RUN   (policies/amd-policy.yaml)
+RUNTIME INVENTORY    = AVAILABLE NOW
+COMPILED ROUTES      = ACTIVE EXECUTION
+```
 
+Profiles under `policies/profiles/` are **overlays** (objective / lifecycle / V1 SR routes),
+not independent recommendation systems. See [policy-model.md](policy-model.md) and
+[amd-routing-matrix.md](amd-routing-matrix.md). Compile still emits V1 manifests plus
+`routing_matrix` and `amd_policy` fields in `ui-metadata.json`.
 ### AMD Compute Positioning
 
 - **EPYC** — CPU-centric / batch / low-QPS / fleet utilization — **not** a GPU interactive competitor; rises for batch/offline + relaxed latency; does not auto-rise for high-concurrency interactive.

@@ -29,6 +29,13 @@ def test_policy_profiles_validate():
     catalog = load_catalog(ROOT / "catalog" / "aims.yaml")
     endpoints = load_endpoints(ROOT / "config" / "endpoints.example.yaml")
     token_factory = load_token_factory(ROOT / "config" / "token-factory.example.yaml")
-    for profile in (ROOT / "policies").glob("amd-*.yaml"):
+    paths = list((ROOT / "policies" / "profiles").glob("amd-*.yaml"))
+    paths += [
+        p
+        for p in (ROOT / "policies").glob("amd-*.yaml")
+        if p.name != "amd-policy.yaml"
+    ]
+    assert paths
+    for profile in paths:
         policies = __import__("yaml").safe_load(profile.read_text())
         validate_all(endpoints, policies, token_factory, catalog)

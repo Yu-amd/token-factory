@@ -4,6 +4,10 @@ Additive guidance for the Opinionated Routing Matrix. **No fabricated benchmarks
 no invented tokens/sec, TTFT, $/hour, or $/1M tokens. Measured slots in
 `catalog/cost-model.yaml` stay empty until AMD publishes numbers.
 
+Canonical policy (eligibility, compute positioning, objectives, fallback) lives in
+[`policies/amd-policy.yaml`](../policies/amd-policy.yaml) — see [policy-model.md](policy-model.md).
+This document covers economic *language* and fit dimensions only.
+
 ## Core ideas
 
 1. **Cheapest hardware ≠ cheapest token** — at high utilization, high-throughput Instinct

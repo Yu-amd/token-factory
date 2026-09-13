@@ -175,6 +175,15 @@ def load_routing_bundle(root: Path | None = None) -> dict[str, Any]:
         "aliases": aliases,
     }
 
+    # Canonical AMD policy prefers policies/amd-policy.yaml (catalog path is compat shim).
+    try:
+        from token_factory.policy.loader import load_canonical_policy
+
+        policy = load_canonical_policy(root)
+    except Exception:
+        policy_path = base / "amd-routing-policy.yaml"
+        policy = _load_yaml(policy_path) if policy_path.exists() else {}
+
     return {
         "aims": aims_merged,
         "aims_ga": aims_ga,  # pristine GA catalog for V1-style checks
@@ -182,7 +191,7 @@ def load_routing_bundle(root: Path | None = None) -> dict[str, Any]:
         "use_cases": _load_yaml(base / "use-cases.yaml"),
         "models": _load_yaml(base / "models.yaml"),
         "cost_model": _load_yaml(base / "cost-model.yaml"),
-        "policy": _load_yaml(base / "amd-routing-policy.yaml"),
+        "policy": policy,
         "aliases": aliases,
         "aliases_doc": aliases_doc,
     }

@@ -165,7 +165,11 @@ def test_policy_profiles_still_validate():
     endpoints = load_endpoints(ROOT / "config" / "endpoints.example.yaml")
     catalog = load_catalog(ROOT / "catalog" / "aims.yaml")
     tf = load_token_factory(ROOT / "config" / "token-factory.example.yaml")
-    for path in (ROOT / "policies").glob("amd-*.yaml"):
+    paths = list((ROOT / "policies" / "profiles").glob("amd-*.yaml"))
+    paths += [
+        p for p in (ROOT / "policies").glob("amd-*.yaml") if p.name != "amd-policy.yaml"
+    ]
+    for path in paths:
         policies = load_policies(path)
         errors = validate_all(endpoints, policies, tf, catalog)
         assert not errors, (path, errors)

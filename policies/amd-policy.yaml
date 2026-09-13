@@ -1,0 +1,705 @@
+version: '3'
+policy:
+  id: amd-routing-policy
+  display_name: AMD Opinionated Routing Policy
+  policy_version: '2.3'
+  published: '2026-09-13'
+  description: >-
+    Canonical AMD workload-to-model-to-compute policy used by Token Factory. AIM catalog = CAN RUN;
+    this policy = SHOULD RUN; endpoint inventory = AVAILABLE NOW; compiled routes = ACTIVE EXECUTION.
+  source_path: policies/amd-policy.yaml
+  compat_path: catalog/amd-routing-policy.yaml
+  inputs:
+  - use_case
+  - capabilities
+  - objective
+  - serving_pattern
+  - traffic
+  - latency_requirement
+  - deployment
+  - lifecycle
+  - locality
+  - available_compute
+  - endpoint_health
+  recommendation_levels: &id001
+  - PREFERRED
+  - RECOMMENDED
+  - ACCEPTABLE
+  - SUPPORTED
+  - NOT_SUPPORTED
+  aim_support_rank: &id002
+    optimized: 4
+    preview: 3
+    unoptimized: 2
+    general: 1
+  unoptimized_max_level: ACCEPTABLE
+  eligibility:
+    hard_gates:
+    - id: aim-support
+      rule: Model × compute must exist in AIM catalog (GA or tech-preview merge).
+      kind: hard
+    - id: capability-required
+      rule: Model must satisfy use-case required capabilities (e.g. vision for VLM).
+      kind: hard
+    - id: lifecycle-mode
+      rule: Lifecycle must be allowed by active mode (production excludes preview/tech-preview).
+      kind: hard
+    - id: unoptimized-ceiling
+      rule: Unoptimized AIM cells never rank above ACCEPTABLE unless an explicit override says otherwise.
+      kind: hard
+    - id: private-eval-not-production
+      rule: Private-eval / Tech Preview / Preview cells are never silent production GA.
+      kind: hard
+    capability_gates:
+      multimodal: requires vision or multimodal capability
+      vlm: requires vision capability
+      image-understanding: requires vision capability
+      tool-use-agent: requires tool-use when mandatory
+      coding-assistant: requires coding or strong instruct capability floor
+      long-context-rag: requires long-context capability
+    lifecycle_rules: &id003
+      default_ga: ga
+      production:
+        allow_preview: false
+        allow_tech_preview: false
+      evaluation:
+        allow_preview: true
+        allow_tech_preview: true
+      local:
+        allow_preview: true
+        allow_tech_preview: true
+    locality_rules:
+      data_locality_preferred: Prefer Radeon/local compute when AIM is capable; soft-penalize remote
+        Instinct.
+      incapable_never_wins: Incapable AIMs never win under locality preference.
+    deployment_rules:
+      enterprise_interactive: High-concurrency enterprise interactive prefers Instinct rack-scale.
+      workstation: Workstation/local deployments prefer Radeon when capable.
+      pcie_enterprise: MI350P for conventional PCIe / OEM enterprise servers (lifecycle-gated).
+    serving_pattern_rules:
+      interactive_high_traffic: EPYC deprioritized for interactive + high traffic.
+      batch_raises_epyc: EPYC rises for batch/offline-batch with relaxed/unconstrained latency.
+      interactive_neq_high_traffic: Interactive ≠ high traffic; traffic is a separate control.
+  compute_positioning:
+    continuum_label: Deployment positioning — not a benchmark ranking
+    continuum:
+    - id: radeon
+      label: Radeon
+      role: local AI / workstation
+    - id: mi350p
+      label: MI350P
+      role: PCIe enterprise
+    - id: instinct
+      label: Instinct X-series
+      role: high-scale acceleration
+    epyc_note: EPYC spans CPU-centric / batch use cases based on workload economics and utilization
+    instinct:
+      display_name: AMD Instinct
+      family: instinct
+      role: primary datacenter GPU class
+      statement: >-
+        Instinct is the primary AMD compute class for large-model, latency-sensitive, high-concurrency,
+        reasoning-intensive, multimodal, and datacenter-scale AI inference.
+      notes:
+      - Do not claim all Instinct accelerators are interchangeable.
+      - Generation bias is soft — not a fixed rank key.
+      preferred_for:
+      - interactive
+      - online-throughput
+      - large-model
+      - high-concurrency
+      - reasoning
+      - multimodal
+    mi350p:
+      display_name: AMD Instinct MI350P
+      family: instinct
+      form_factor: PCIe
+      role: PCIe enterprise between workstation and rack-scale
+      statement: >-
+        MI350P represents an Instinct PCIe enterprise deployment path for conventional server and
+        OEM infrastructure. Current MI350P AIMs represented in Token Factory may be Tech Preview and
+        must remain lifecycle-gated.
+      lifecycle_default: tech-preview
+      not_alias_of: MI350X
+      preferred_for:
+      - pcie-enterprise
+      - oem-server
+      - evaluation
+    radeon:
+      display_name: AMD Radeon
+      family: radeon
+      role: local / workstation / privacy
+      statement: >-
+        Radeon AIMs target local/workstation inference where locality, privacy, developer experience,
+        and infrastructure footprint matter. Radeon should be preferred only when a supported model
+        clears the workload's capability and scale requirements.
+      lifecycle_default: preview
+      preferred_for:
+      - local
+      - workstation
+      - privacy
+      - developer
+      - local-multimodal
+      not: cheaper Instinct
+    epyc:
+      display_name: AMD EPYC
+      family: epyc
+      role: CPU-centric / batch / fleet utilization
+      statement: >-
+        EPYC AIMs target CPU-centric, low-QPS, asynchronous, and batch-oriented inference. They are
+        not positioned as a replacement for GPU acceleration on latency-sensitive interactive inference.
+        For workloads with relaxed latency, supported models, and high utilization of existing CPU
+        infrastructure, EPYC can become an economically appropriate option.
+      preferred_for:
+      - batch
+      - offline-batch
+      - low-qps
+      - fleet-utilization
+      not: GPU interactive competitor
+  serving_patterns:
+    interactive:
+      display_name: Interactive
+      optimizes_for: response time
+      compute_tendency: GPU/Instinct
+      default_latency: critical
+    online-throughput:
+      display_name: Online Throughput
+      optimizes_for: concurrency
+      compute_tendency: Instinct
+      default_latency: important
+    batch:
+      display_name: Batch
+      optimizes_for: completion economics
+      compute_tendency: EPYC or GPU
+      default_latency: relaxed
+    offline-batch:
+      display_name: Offline Batch
+      optimizes_for: utilization/economics
+      compute_tendency: EPYC can rise
+      default_latency: unconstrained
+  objectives:
+    quality:
+      id: quality
+      display_name: Best Performance
+      alias_ids:
+      - performance
+      - quality
+      summary: Maximize capability + performance (+ AIM maturity / specialization); economics only
+        as tie-break.
+      weights_hint:
+        capability: high
+        performance: high
+        economic: tie-break
+    balanced:
+      id: balanced
+      display_name: Balanced
+      alias_ids:
+      - balanced
+      summary: Trade capability / quality / perf / AIM / economic / deployment / traffic / lifecycle
+        / serving / locality.
+      weights_hint:
+        capability: medium
+        performance: medium
+        economic: medium
+    lowest-cost-sufficient:
+      id: lowest-cost-sufficient
+      display_name: Lowest-Cost Sufficient
+      alias_ids:
+      - token-cost
+      - lowest-cost-sufficient
+      - cost
+      summary: Capability floor → filters → economically lowest among sufficient (never smallest=sufficient).
+      weights_hint:
+        capability: floor
+        economic: primary
+    latency:
+      id: latency
+      display_name: Lowest Latency
+      alias_ids:
+      - latency
+      - low-latency
+      summary: Prefer lower-TTFT footprints when capability clears the floor.
+    throughput:
+      id: throughput
+      display_name: Highest Throughput
+      alias_ids:
+      - throughput
+      summary: Prefer high-throughput Instinct for concurrency-sensitive online serving.
+    edge-local:
+      id: edge-local
+      display_name: Local / Workstation First
+      alias_ids:
+      - edge-local
+      - local
+      - edge
+      summary: Prefer Radeon/local compute where capability permits.
+    enterprise:
+      id: enterprise
+      display_name: Enterprise Production
+      alias_ids:
+      - enterprise
+      summary: Production-biased Instinct routes with strict lifecycle gates.
+  objective_compute_bias: &id004
+    token-cost:
+    - epyc
+    - radeon
+    - instinct
+    lowest-cost-sufficient:
+    - epyc
+    - radeon
+    - instinct
+    edge-local:
+    - radeon
+    - epyc
+    - instinct
+    latency:
+    - radeon
+    - instinct
+    - epyc
+    throughput:
+    - instinct
+    - radeon
+    - epyc
+    quality:
+    - instinct
+    - epyc
+    - radeon
+    enterprise:
+    - instinct
+    - epyc
+    - radeon
+    balanced:
+    - instinct
+    - radeon
+    - epyc
+  objective_size_bias: &id005
+    token-cost:
+    - small
+    - medium
+    - large
+    - frontier
+    lowest-cost-sufficient:
+    - small
+    - medium
+    - large
+    - frontier
+    latency:
+    - small
+    - medium
+    - large
+    - frontier
+    edge-local:
+    - small
+    - medium
+    quality:
+    - frontier
+    - large
+    - medium
+    - small
+    throughput:
+    - medium
+    - large
+    - frontier
+    - small
+    enterprise:
+    - large
+    - medium
+    - frontier
+    - small
+    balanced:
+    - medium
+    - large
+    - small
+    - frontier
+  escalation: &id006
+    local_to_datacenter:
+    - radeon
+    - MI350P
+    - MI300X
+    - MI350X
+    - MI355X
+    notes: 'Prefer local Radeon when capable; escalate to MI350P (PCIe enterprise) then rack-scale
+      Instinct when capability floor or concurrency requires it.
+
+      '
+  fallback:
+    enabled_default: true
+    rules:
+    - Prefer next-ranked eligible AIM-supported candidate when primary endpoint is unavailable.
+    - Respect lifecycle mode — do not fall back into excluded preview/tech-preview under production.
+    - V1 Semantic Router fallback.chain lists endpoint IDs tried in order.
+    - Profile overlay may tighten or reorder the V1 fallback chain without changing canonical eligibility.
+    v1_chain_source: profile.policy.fallback.chain
+  ranking_dimensions:
+  - capability_fit
+  - performance_fit
+  - economic_fit
+  - deployment_fit
+  - lifecycle_fit
+  - serving_pattern_fit
+  - locality_fit
+  - aim_support
+  explainability:
+    enabled: true
+    steps: 7
+  overrides: &id007
+    coding-assistant:
+      Qwen/Qwen3-Coder-Next:
+        MI355X:
+          recommendation: PREFERRED
+          rationale:
+          - coding-specialized
+          - optimized-aim
+          - high-throughput
+        MI350X:
+          recommendation: RECOMMENDED
+          rationale:
+          - coding-specialized
+          - optimized-aim
+        MI350P:
+          recommendation: RECOMMENDED
+          rationale:
+          - coding-specialized
+          - tech-preview
+          - pcie-enterprise
+        MI300X:
+          recommendation: RECOMMENDED
+          rationale:
+          - coding-specialized
+          - optimized-aim
+          - widely-deployed
+        MI325X:
+          recommendation: SUPPORTED
+          rationale:
+          - aim-unoptimized-do-not-promote
+      openai/gpt-oss-120b:
+        MI355X:
+          recommendation: RECOMMENDED
+          rationale:
+          - strong-general-coding
+          - optimized-aim
+        MI350X:
+          recommendation: RECOMMENDED
+          rationale:
+          - strong-general-coding
+          - optimized-aim
+        MI350P:
+          recommendation: ACCEPTABLE
+          rationale:
+          - strong-general-coding
+          - tech-preview
+        MI300X:
+          recommendation: ACCEPTABLE
+          rationale:
+          - deployed-v1-default
+          - optimized-aim
+      meta-llama/Llama-3.1-8B-Instruct:
+        R9700:
+          recommendation: RECOMMENDED
+          rationale:
+          - local-workstation
+          - radeon-preview
+        W7900:
+          recommendation: RECOMMENDED
+          rationale:
+          - local-workstation
+          - radeon-preview
+    code-completion:
+      Qwen/Qwen3-Coder-Next:
+        MI300X:
+          recommendation: RECOMMENDED
+          rationale:
+          - coding-specialized
+        R9700:
+          recommendation: PREFERRED
+          rationale:
+          - local-workstation
+          - low-latency-interactive
+        W7900:
+          recommendation: RECOMMENDED
+          rationale:
+          - local-workstation
+      Qwen/Qwen3.5-9B:
+        EPYC_9965:
+          recommendation: PREFERRED
+          rationale:
+          - token-cost
+          - edge-cpu
+        R9700:
+          recommendation: RECOMMENDED
+          rationale:
+          - workstation
+          - radeon-preview
+        W7900:
+          recommendation: RECOMMENDED
+          rationale:
+          - workstation
+          - radeon-preview
+    simple-chat:
+      Qwen/Qwen3.5-4B:
+        EPYC_9965:
+          recommendation: PREFERRED
+          rationale:
+          - token-cost
+          - small-model
+          - epyc-aim
+        EPYC_ZEN4:
+          recommendation: RECOMMENDED
+          rationale:
+          - token-cost
+      Qwen/Qwen3.5-9B:
+        R9700:
+          recommendation: PREFERRED
+          rationale:
+          - workstation-local
+          - radeon-preview
+        W7900:
+          recommendation: RECOMMENDED
+          rationale:
+          - workstation-local
+          - radeon-preview
+        EPYC_9965:
+          recommendation: RECOMMENDED
+          rationale:
+          - token-cost
+      google/gemma-3n-E4B-it:
+        R9700:
+          recommendation: RECOMMENDED
+          rationale:
+          - local-workstation
+          - radeon-preview
+        W7900:
+          recommendation: RECOMMENDED
+          rationale:
+          - local-workstation
+          - radeon-preview
+      meta-llama/Llama-3.1-8B-Instruct:
+        R9700:
+          recommendation: RECOMMENDED
+          rationale:
+          - local-workstation
+          - radeon-preview
+        W7900:
+          recommendation: RECOMMENDED
+          rationale:
+          - local-workstation
+          - radeon-preview
+      zai-org/GLM-4.7-Flash:
+        R9700:
+          recommendation: RECOMMENDED
+          rationale:
+          - local-workstation
+          - radeon-preview
+        W7900:
+          recommendation: RECOMMENDED
+          rationale:
+          - local-workstation
+          - radeon-preview
+      openai/gpt-oss-20b:
+        MI300X:
+          recommendation: ACCEPTABLE
+          rationale:
+          - v1-general-default
+        MI350X:
+          recommendation: ACCEPTABLE
+          rationale:
+          - instinct-when-sla-requires
+        MI350P:
+          recommendation: ACCEPTABLE
+          rationale:
+          - pcie-enterprise
+          - tech-preview
+    enterprise-chat:
+      openai/gpt-oss-120b:
+        MI355X:
+          recommendation: PREFERRED
+          rationale:
+          - enterprise-quality
+          - high-concurrency
+        MI350X:
+          recommendation: RECOMMENDED
+          rationale:
+          - enterprise-quality
+        MI350P:
+          recommendation: ACCEPTABLE
+          rationale:
+          - enterprise-pcie
+          - tech-preview
+        MI300X:
+          recommendation: RECOMMENDED
+          rationale:
+          - widely-deployed
+          - optimized-aim
+      openai/gpt-oss-20b:
+        MI300X:
+          recommendation: ACCEPTABLE
+          rationale:
+          - cost-alternative
+    mathematical-reasoning:
+      deepseek-ai/DeepSeek-R1:
+        MI355X:
+          recommendation: PREFERRED
+          rationale:
+          - reasoning-specialized
+          - optimized-aim
+        MI350X:
+          recommendation: RECOMMENDED
+          rationale:
+          - reasoning-specialized
+        MI300X:
+          recommendation: RECOMMENDED
+          rationale:
+          - reasoning-specialized
+          - optimized-aim
+      openai/gpt-oss-120b:
+        MI300X:
+          recommendation: ACCEPTABLE
+          rationale:
+          - v1-math-route-default
+    complex-reasoning:
+      deepseek-ai/DeepSeek-R1-0528:
+        MI355X:
+          recommendation: PREFERRED
+          rationale:
+          - reasoning-specialized
+        MI350X:
+          recommendation: RECOMMENDED
+          rationale:
+          - reasoning-specialized
+        MI300X:
+          recommendation: RECOMMENDED
+          rationale:
+          - reasoning-specialized
+    vlm:
+      Qwen/Qwen3-VL-235B-A22B-Instruct:
+        MI355X:
+          recommendation: PREFERRED
+          rationale:
+          - vision-language
+          - optimized-aim
+        MI350X:
+          recommendation: RECOMMENDED
+          rationale:
+          - vision-language
+        MI300X:
+          recommendation: RECOMMENDED
+          rationale:
+          - vision-language
+          - optimized-aim
+      Qwen/Qwen3-VL-8B-Instruct:
+        R9700:
+          recommendation: PREFERRED
+          rationale:
+          - workstation-vlm
+          - radeon-preview
+          - local-multimodal
+        W7900:
+          recommendation: RECOMMENDED
+          rationale:
+          - workstation-vlm
+          - radeon-preview
+    image-understanding:
+      Qwen/Qwen3-VL-8B-Instruct:
+        R9700:
+          recommendation: PREFERRED
+          rationale:
+          - local-vlm
+          - radeon-preview
+        W7900:
+          recommendation: RECOMMENDED
+          rationale:
+          - local-vlm
+          - radeon-preview
+      google/gemma-3n-E4B-it:
+        R9700:
+          recommendation: RECOMMENDED
+          rationale:
+          - local-vlm
+          - radeon-preview
+        W7900:
+          recommendation: RECOMMENDED
+          rationale:
+          - local-vlm
+          - radeon-preview
+    medical:
+      google/medgemma-27b-it:
+        MI355X:
+          recommendation: PREFERRED
+          rationale:
+          - domain-specialized
+          - optimized-aim
+        MI350X:
+          recommendation: RECOMMENDED
+          rationale:
+          - domain-specialized
+        MI300X:
+          recommendation: RECOMMENDED
+          rationale:
+          - domain-specialized
+          - optimized-aim
+    repository-reasoning:
+      Qwen/Qwen3-Coder-Next:
+        MI355X:
+          recommendation: PREFERRED
+          rationale:
+          - coding-agent
+          - long-context-prefer-instinct
+        MI350X:
+          recommendation: RECOMMENDED
+          rationale:
+          - coding-agent
+        MI350P:
+          recommendation: ACCEPTABLE
+          rationale:
+          - coding-agent
+          - tech-preview
+        MI300X:
+          recommendation: RECOMMENDED
+          rationale:
+          - coding-agent
+      openai/gpt-oss-120b:
+        MI355X:
+          recommendation: RECOMMENDED
+          rationale:
+          - large-context-coding
+        MI300X:
+          recommendation: ACCEPTABLE
+          rationale:
+          - deployed-fallback
+  profiles:
+    directory: policies/profiles
+    compat_directory: policies
+    known:
+    - amd-balanced
+    - amd-quality
+    - amd-cost-efficient
+    - amd-low-latency
+    - amd-edge-first
+    - amd-enterprise
+  provenance:
+    aims_ga: catalog/aims.yaml
+    aims_tech_preview: catalog/aims-tech-preview.yaml
+    use_cases: catalog/use-cases.yaml
+    compute: catalog/compute.yaml
+    models: catalog/models.yaml
+    cost_model: catalog/cost-model.yaml
+    canonical_policy: policies/amd-policy.yaml
+    engine: src/token_factory/routing_matrix/engine.py
+metadata:
+  amd_routing_policy:
+    version: '2.3'
+    published: '2026-09-13'
+    canonical_path: policies/amd-policy.yaml
+  description: 'Explicit overrides and ranking rules for the Opinionated Routing Matrix. Generic scoring
+    derives most cells; overrides encode AMD-style preferences. Lifecycle filtering: production excludes
+    preview/tech-preview by default.
+
+    '
+recommendation_levels: *id001
+aim_support_rank: *id002
+unoptimized_max_level: ACCEPTABLE
+lifecycle: *id003
+objective_compute_bias: *id004
+objective_size_bias: *id005
+escalation: *id006
+overrides: *id007

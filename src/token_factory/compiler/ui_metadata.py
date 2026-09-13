@@ -13,6 +13,7 @@ def _routing_matrix_metadata(policy: dict[str, Any]) -> dict[str, Any]:
     policy_name = policy.get("name")
     objective = priority_mode
     policy_version = None
+    policy_catalog = "policies/amd-policy.yaml"
     try:
         from token_factory.routing_matrix.loader import load_routing_bundle
 
@@ -25,6 +26,13 @@ def _routing_matrix_metadata(policy: dict[str, Any]) -> dict[str, Any]:
             .get("amd_routing_policy", {})
             .get("version")
             or bundle["policy"].get("version")
+        )
+        policy_catalog = (
+            (bundle["policy"].get("metadata") or {})
+            .get("amd_routing_policy", {})
+            .get("canonical_path")
+            or bundle["policy"].get("_source_path")
+            or policy_catalog
         )
     except Exception:
         # Compile must not fail if additive catalogs are absent
@@ -47,8 +55,10 @@ def _routing_matrix_metadata(policy: dict[str, Any]) -> dict[str, Any]:
     return {
         "available": True,
         "doc": "docs/amd-routing-matrix.md",
+        "policy_doc": "docs/policy-model.md",
         "cli": "token-factory recommend",
-        "policy_catalog": "catalog/amd-routing-policy.yaml",
+        "policy_cli": "token-factory policy",
+        "policy_catalog": policy_catalog,
         "policy_version": policy_version,
         "priority_mode": priority_mode,
         "policy_name": policy_name,
@@ -56,7 +66,8 @@ def _routing_matrix_metadata(policy: dict[str, Any]) -> dict[str, Any]:
         "thesis": {
             "aim_support": "CAN RUN",
             "amd_recommendation": "SHOULD RUN",
-            "runtime_inventory": "CAN ROUTE NOW",
+            "runtime_inventory": "AVAILABLE NOW",
+            "compiled_routes": "ACTIVE EXECUTION",
         },
     }
 
@@ -90,7 +101,7 @@ def compile_ui_metadata(
             }
         )
 
-    return {
+    out: dict[str, Any] = {
         "virtual_model": policy.get("virtual_model")
         or (token_factory or {}).get("virtual_model", VIRTUAL_MODEL),
         "policy_name": policy.get("name"),
@@ -101,9 +112,27 @@ def compile_ui_metadata(
         "links": {
             "gateway": "http://127.0.0.1:18080",
             "semantic_router_api": "http://127.0.0.1:8081",
-            "semantic_router_dashboard": "http://127.0.0.1:8700",
+            "semantic_router_dashboard": "http://localhost:8700",
             "grafana": "http://127.0.0.1:3000",
             "prometheus": "http://127.0.0.1:9090",
         },
         "pinned_versions": PINNED_VERSIONS,
     }
+
+    # Rich Policies tab payload from canonical AMD policy (additive; compile stays resilient)
+    try:
+        from token_factory.policy.compile import policy_ui_metadata
+
+        out["amd_policy"] = policy_ui_metadata(
+            profile_name=policy.get("name"),
+            endpoints=endpoints,
+            v1_policies=policies,
+        )
+    except Exception as exc:
+        out["amd_policy"] = {
+            "available": False,
+            "error": f"{exc.__class__.__name__}: {exc}",
+            "version": out["routing_matrix"].get("policy_version"),
+        }
+
+    return out

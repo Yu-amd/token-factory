@@ -53,7 +53,16 @@ def load_token_factory(path: Path | None = None) -> dict[str, Any]:
 
 
 def load_policy_profile(name: str) -> dict[str, Any]:
-    policies_path = repo_root() / "policies" / f"{name}.yaml"
-    if not policies_path.exists():
-        raise FileNotFoundError(f"Policy profile not found: {policies_path}")
-    return load_yaml(policies_path)
+    """Load a V1/V2 profile overlay — prefers policies/profiles/, falls back to policies/."""
+    name = name.removesuffix(".yaml")
+    root = repo_root()
+    candidates = [
+        root / "policies" / "profiles" / f"{name}.yaml",
+        root / "policies" / f"{name}.yaml",
+    ]
+    for policies_path in candidates:
+        if policies_path.exists():
+            return load_yaml(policies_path)
+    raise FileNotFoundError(
+        f"Policy profile not found: {name} (searched {[str(c) for c in candidates]})"
+    )

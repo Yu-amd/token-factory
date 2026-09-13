@@ -12,8 +12,8 @@ Repository: https://github.com/Yu-amd/token-factory
 - **Python CLI** (`token-factory`): preflight, compile, install, verify, ports, UI, route explain
 - **Policy profiles**: balanced, quality, cost-efficient, low-latency, edge-first, enterprise
 - **AIM catalog** from AMD Enterprise AI accelerator matrix
-- **Streamlit UI** — Playground with **live TTFT** (SR classify → direct AIM stream), **AMD Routing Matrix**, routing, architecture, inventory, operations
-- **AMD Opinionated Routing** — workload → model × compute recommendations (`token-factory recommend`)
+- **Streamlit UI** — Playground with **live TTFT**, **AMD Routing Matrix**, **Policies** (canonical policy explorer), routing, architecture, inventory, operations
+- **AMD Opinionated Routing** — one canonical policy (`policies/amd-policy.yaml`) shared by Matrix, Explain Policy, simulation, and compile (`token-factory recommend` / `token-factory policy`)
 - **Mock OpenAI backends** for kind/CI without GPU
 - **Clean port-forward manager** with PID tracking (no blind `pkill kubectl`)
 
@@ -22,19 +22,28 @@ Repository: https://github.com/Yu-amd/token-factory
 Token Factory V1 knows what is **deployed** and how Semantic Router classifies a request.
 V2 adds an opinionated matrix on top of the authoritative AIM catalog — without replacing the gateway path:
 
+```text
+AIM CATALOG            = CAN RUN      (catalog/aims.yaml)
+AMD CANONICAL POLICY   = SHOULD RUN   (policies/amd-policy.yaml v2.3)
+RUNTIME INVENTORY      = AVAILABLE NOW (config/endpoints.yaml)
+COMPILED ROUTES        = ACTIVE EXECUTION (profile overlays → SR / AIGW)
+```
+
 | Concept | Meaning | Source |
 |---------|---------|--------|
 | **AIM** | CAN RUN | `catalog/aims.yaml` |
-| **Matrix** | SHOULD RUN | `catalog/amd-routing-policy.yaml` + engine |
-| **Inventory** | CAN ROUTE NOW | `config/endpoints.yaml` |
+| **Canonical policy** | SHOULD RUN | `policies/amd-policy.yaml` + engine |
+| **Inventory** | AVAILABLE NOW | `config/endpoints.yaml` |
+| **Profiles** | Overlays | `policies/profiles/amd-*.yaml` (objective / lifecycle / V1 routes) |
 
 Use cases, compute metadata, model capabilities, and a relative (non-fabricated) cost model live under `catalog/`. Rankings are produced by `RecommendationEngine` and surfaced in:
 
-- UI tab **AMD Routing Matrix** (`make ui`)
+- UI tabs **AMD Routing Matrix** and **Policies** (`make ui`)
 - CLI: `token-factory recommend --use-case coding-assistant --objective balanced`
+- CLI: `token-factory policy show|explain|coverage|validate`
 - Makefile: `make recommend`
 
-Details, methodology, overrides, and CLI examples: [docs/amd-routing-matrix.md](docs/amd-routing-matrix.md).
+Details: [docs/policy-model.md](docs/policy-model.md), [docs/amd-routing-matrix.md](docs/amd-routing-matrix.md).
 
 ### AMD Compute Positioning
 
@@ -130,7 +139,9 @@ curl -s http://127.0.0.1:18080/v1/chat/completions \
 config/                 Example + active YAML config
 policies/               amd-* routing profiles
 catalog/aims.yaml       AMD AIM support matrix (CAN RUN)
-catalog/*               Use-cases, compute, models, cost, amd-routing-policy (SHOULD RUN)
+catalog/*               AIM / use-cases / compute / models / cost (CAN RUN + metadata)
+policies/amd-policy.yaml Canonical AMD routing policy (SHOULD RUN, v2.3)
+policies/profiles/      Profile overlays (objective + V1 SR routes)
 src/token_factory/      Python package (CLI, compiler, catalog, routing_matrix)
 deploy/                 Helm values + K8s manifests
 scripts/                Modular install/apply/uninstall
@@ -155,6 +166,7 @@ docs/                   Architecture, deployment, ops guides
 | `token-factory route-explain "..."` | Heuristic route explanation |
 | `token-factory catalog-update` | Refresh catalog metadata timestamp |
 | `token-factory recommend` | AMD Opinionated Routing recommendations |
+| `token-factory policy …` | validate / show / explain / coverage / compile / export / diff |
 | `token-factory ui` | Launch Streamlit |
 
 ## Makefile targets
@@ -193,7 +205,8 @@ CI (`.github/workflows/ci.yml`): ruff, pytest, compile, Helm template dashboard 
 ## Documentation
 
 - [BUILD_REPORT.md](BUILD_REPORT.md) — V1 verified status, routing tests, workarounds
-- [AMD Opinionated Routing Matrix](docs/amd-routing-matrix.md) — CAN / SHOULD / CAN ROUTE NOW
+- [AMD Canonical Policy Model](docs/policy-model.md) — CAN / SHOULD / AVAILABLE / ACTIVE
+- [AMD Opinionated Routing Matrix](docs/amd-routing-matrix.md) — Matrix UX and lifecycle
 - [Configuration](docs/configuration.md)
 - [Deployment](docs/deployment.md)
 - [Streamlit UI / Playground](docs/ui.md)

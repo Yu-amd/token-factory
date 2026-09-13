@@ -6,8 +6,9 @@ Envoy AI Gateway, or the AIM support catalog. It answers a different question th
 | Layer | Question | Source of truth |
 |-------|----------|-----------------|
 | **AIM Support** | CAN RUN? | `catalog/aims.yaml` (authoritative GA) + `catalog/aims-tech-preview.yaml` (MI350P TP merge) |
-| **AMD Recommendation** | SHOULD RUN? | `catalog/amd-routing-policy.yaml` + scoring + **lifecycle filter** |
-| **Runtime Availability** | CAN ROUTE NOW? | `config/endpoints.yaml` (compiled inventory) |
+| **AMD Recommendation** | SHOULD RUN? | **`policies/amd-policy.yaml`** (canonical; v2.3) + scoring + **lifecycle filter** |
+| **Runtime Availability** | AVAILABLE NOW? | `config/endpoints.yaml` (compiled inventory) |
+| **Compiled Routes** | ACTIVE EXECUTION? | Profile overlay (`policies/profiles/amd-*.yaml`) → Semantic Router / AIGW |
 
 Token economics (when used) only ranks **eligible** AIM-supported cells for a chosen objective.
 There are **no fabricated $/token**, TTFT, or tokens/sec figures in this repository.
@@ -16,13 +17,13 @@ There are **no fabricated $/token**, TTFT, or tokens/sec figures in this reposit
 
 ```text
 AIM support        = CAN RUN
-AMD routing matrix = SHOULD RUN
-Live inventory     = CAN ROUTE NOW
+AMD canonical policy = SHOULD RUN
+Live inventory     = AVAILABLE NOW
+Compiled routes    = ACTIVE EXECUTION
 Lifecycle          = GA vs Preview vs Tech Preview (orthogonal to support_level)
 ```
 
-V1 still does: request → semantic intent → policy route → endpoint.
-V2 adds: use-case × objective × lifecycle → ranked model×compute → overlay inventory.
+See [policy-model.md](policy-model.md) for the Policies tab / CLI / overlay model. The Routing Matrix is a **projection** of the same canonical policy.
 
 ## Catalogs
 
@@ -35,7 +36,9 @@ V2 adds: use-case × objective × lifecycle → ranked model×compute → overla
 | `catalog/use-cases.yaml` | Workloads, objectives, lifecycle modes, capability floors |
 | `catalog/models.yaml` | Capability / specialization metadata |
 | `catalog/cost-model.yaml` | Relative cost + empty measured benchmark schema |
-| `catalog/amd-routing-policy.yaml` | Overrides, biases, escalation hints |
+| `catalog/amd-routing-policy.yaml` | Compat shim → `policies/amd-policy.yaml` |
+| **`policies/amd-policy.yaml`** | **Canonical SHOULD RUN policy** (eligibility, positioning, objectives, overrides) |
+| `policies/profiles/amd-*.yaml` | Profile overlays (objective / lifecycle / V1 SR routes) — not independent matrices |
 
 Engine: `src/token_factory/routing_matrix/` (`RecommendationEngine`).
 

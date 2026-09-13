@@ -17,10 +17,19 @@ make ui       # http://localhost:8501  (runs from ui/ so .streamlit/config.toml 
 | **Routing** | Compiled domain → AIM routes |
 | **Architecture** | Control-path diagram |
 | **Endpoints** | Endpoint inventory from compile |
-| **Policies** | Active policy pack |
+| **Policies** | AMD Opinionated Routing Policy — eligibility, compute positioning, objectives, coverage, Explain Policy |
 | **Operations** | Links to SR Dashboard / Grafana / Prometheus |
 
-See [amd-routing-matrix.md](amd-routing-matrix.md) for CAN / SHOULD / CAN ROUTE NOW.
+See [policy-model.md](policy-model.md) and [amd-routing-matrix.md](amd-routing-matrix.md).
+
+## Policies tab
+
+Human-readable view of **`policies/amd-policy.yaml`** (v2.3). Sections include Policy Overview,
+Decision Pipeline, Eligibility / Guardrails, AMD Compute Positioning (Instinct / MI350P / Radeon / EPYC),
+Objective Profiles, Serving Patterns, Use-Case Coverage, Explain Policy (engine steps 1–7), Fallback,
+Canonical vs Runtime, Compiled Routes, and Provenance. Does **not** paste the full Routing Matrix.
+
+Implementation: `ui/views/policies.py`.
 
 ## AMD Routing Matrix tab
 
