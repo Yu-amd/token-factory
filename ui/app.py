@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import os
 import textwrap
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import httpx
 import streamlit as st
@@ -474,8 +475,14 @@ def stream_chat_completion(
     prompt: str,
     model: str,
     meta: dict[str, Any],
-):
-    """Yield SSE text deltas from the gateway; update meta with model/finish."""
+) -> Iterator[str]:
+    """Yield SSE text deltas from the gateway; update meta with model/finish.
+
+    Note: Envoy AI Gateway currently delivers the full SSE body in one burst
+    (content-type is event-stream, but bytes are buffered until upstream
+    completes). We still use stream=true and pace UI yields so the Playground
+    shows progressive output instead of a long blank wait then a dump.
+    """
     with httpx.stream(
         "POST",
         f"{GATEWAY}/v1/chat/completions",
@@ -492,6 +499,8 @@ def stream_chat_completion(
             body = response.read().decode("utf-8", errors="replace")[:500]
             raise RuntimeError(f"HTTP {response.status_code}: {body}")
 
+        last_arrive = time.perf_counter()
+        burst_chunks = 0
         for line in response.iter_lines():
             if not line:
                 continue
@@ -515,12 +524,25 @@ def stream_chat_completion(
             delta = choice.get("delta") or {}
             # Prefer visible content; fall back to reasoning so gpt-oss streams live.
             text = delta.get("content") or delta.get("reasoning") or ""
-            if text:
-                if delta.get("content"):
-                    meta["saw_content"] = True
-                elif delta.get("reasoning"):
-                    meta["saw_reasoning"] = True
-                yield text
+            if not text:
+                continue
+            if delta.get("content"):
+                meta["saw_content"] = True
+            elif delta.get("reasoning"):
+                meta["saw_reasoning"] = True
+
+            now = time.perf_counter()
+            gap = now - last_arrive
+            last_arrive = now
+            # Gateway-buffered burst: chunks arrive <5ms apart. Pace display
+            # (~50–80 chars/sec) so the reply types out instead of appearing at once.
+            if gap < 0.005:
+                burst_chunks += 1
+                meta["gateway_buffered"] = True
+                time.sleep(min(0.028, 0.008 + len(text) * 0.003))
+            else:
+                burst_chunks = 0
+            yield text
 
 
 def chat_completion(prompt: str, model: str) -> dict[str, Any]:
@@ -601,13 +623,24 @@ with tab_chat:
                 "finish": None,
                 "saw_content": False,
                 "saw_reasoning": False,
+                "gateway_buffered": False,
             }
+            wait = st.empty()
+            wait.caption("Routing & waiting for first token…")
             try:
-                reply = st.write_stream(
-                    stream_chat_completion(prompt, VIRTUAL_MODEL, stream_meta)
-                )
+                def _paced() -> Iterator[str]:
+                    first = True
+                    for piece in stream_chat_completion(
+                        prompt, VIRTUAL_MODEL, stream_meta
+                    ):
+                        if first:
+                            wait.empty()
+                            first = False
+                        yield piece
+
+                reply = st.write_stream(_paced())
                 if not (reply or "").strip():
-                    # Rare empty stream — fall back once without streaming.
+                    wait.empty()
                     body = chat_completion(prompt, VIRTUAL_MODEL)
                     reply = extract_reply(body)
                     stream_meta["model"] = body.get("model")
@@ -622,15 +655,21 @@ with tab_chat:
                     if stream_meta.get("saw_reasoning")
                     else "stream"
                 )
+                mode = (
+                    "paced (gateway-buffered SSE)"
+                    if stream_meta.get("gateway_buffered")
+                    else "live SSE"
+                )
                 meta_line = (
                     f"routed model={stream_meta.get('model') or '—'} · "
-                    f"finish={stream_meta.get('finish') or '—'} · {kind} · streaming"
+                    f"finish={stream_meta.get('finish') or '—'} · {kind} · {mode}"
                 )
                 st.caption(meta_line)
                 st.session_state.messages.append(
                     {"role": "assistant", "content": reply, "meta": meta_line}
                 )
             except Exception as exc:
+                wait.empty()
                 err = f"{exc} — is the gateway up? Run: `token-factory ports start`"
                 st.error(err)
                 st.session_state.messages.append(
