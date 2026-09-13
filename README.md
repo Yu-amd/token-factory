@@ -12,10 +12,24 @@ Repository: https://github.com/Yu-amd/token-factory
 - **Python CLI** (`token-factory`): preflight, compile, install, verify, ports, UI, route explain
 - **Policy profiles**: balanced, quality, cost-efficient, low-latency, edge-first, enterprise
 - **AIM catalog** from AMD Enterprise AI accelerator matrix
-- **Streamlit UI** — Playground with **live TTFT**, **AMD Routing Matrix**, **Policies** (canonical policy explorer), routing, architecture, inventory, operations
+- **Streamlit UI** — Playground with **live TTFT**, **Automated Demo**, **AMD Routing Matrix**, **Policies** (canonical policy explorer), routing, architecture, inventory, operations
 - **AMD Opinionated Routing** — one canonical policy (`policies/amd-policy.yaml`) shared by Matrix, Explain Policy, simulation, and compile (`token-factory recommend` / `token-factory policy`)
+- **Automated Demo** — declarative scenario packs that validate classification, policy, fallback, and observability (`token-factory demo`) — **not** a benchmark portal
 - **Mock OpenAI backends** for kind/CI without GPU
 - **Clean port-forward manager** with PID tracking (no blind `pkill kubectl`)
+
+## Automated Demo
+
+Routing-policy and observability validation for representative enterprise AI traffic:
+
+```bash
+token-factory demo plan --pack smoke
+token-factory demo run --pack smoke --mock          # CI-friendly mocks
+token-factory demo run --pack executive --mock
+token-factory demo run --pack smoke --ci --mock     # exit 0 on policy PASS
+```
+
+Validates classification, AMD canonical policy eligibility, lifecycle, capability, route/endpoint selection, fallback injection, and telemetry attributes. Latency may be recorded as telemetry only — never as comparative hardware claims. Details: [docs/automated-demo.md](docs/automated-demo.md).
 
 ## AMD Opinionated Routing
 
@@ -168,6 +182,7 @@ docs/                   Architecture, deployment, ops guides
 | `token-factory catalog-update` | Refresh catalog metadata timestamp |
 | `token-factory recommend` | AMD Opinionated Routing recommendations |
 | `token-factory policy …` | validate / show / explain / coverage / compile / export / diff |
+| `token-factory demo …` | Automated Demo plan / run / list (policy validation, not benchmarks) |
 | `token-factory ui` | Launch Streamlit |
 
 ## Makefile targets
@@ -211,6 +226,7 @@ CI (`.github/workflows/ci.yml`): ruff, pytest, compile, Helm template dashboard 
 - [Configuration](docs/configuration.md)
 - [Deployment](docs/deployment.md)
 - [Streamlit UI / Playground](docs/ui.md)
+- [Automated Demo](docs/automated-demo.md) — routing-policy & observability validation (not a benchmark)
 - [Semantic Router Dashboard](docs/semantic-router-dashboard.md)
 - [Routing policies](docs/routing-policy.md)
 - [AMD compute / AIMs](docs/amd-compute-guide.md)

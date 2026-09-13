@@ -1,0 +1,96 @@
+# Observability validation — focus on telemetry attribute presence.
+# Latency/TTFT may appear as operational telemetry only — never comparative HW claims.
+id: observability
+display_name: Observability Validation
+description: >
+  Verify demo requests emit expected trace/metric attributes
+  (demo_run_id, scenario_id, request_id, use case, policy, model, compute, endpoint, fallback).
+coverage:
+  use_cases:
+    - coding-assistant
+    - enterprise-chat
+    - batch-summarization
+  features:
+    - telemetry
+    - prometheus-counters
+    - attribute-propagation
+scenarios:
+  - id: obs-coding
+    display_name: Coding Telemetry
+    request:
+      prompt: Write a Python helper that retries HTTP calls with jittered backoff.
+      use_case_hint: coding-assistant
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    expected:
+      classification:
+        use_case: coding-assistant
+      routing:
+        preferred_compute_family: [instinct]
+        require_production_eligible: true
+    validation:
+      classification: true
+      route: true
+      telemetry: true
+      telemetry_strict: true
+
+  - id: obs-chat
+    display_name: Chat Telemetry
+    request:
+      prompt: Give a one-paragraph overview of Token Factory routing for operators.
+      use_case_hint: enterprise-chat
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    expected:
+      classification:
+        use_case: enterprise-chat
+      routing:
+        require_production_eligible: true
+    validation:
+      classification: true
+      route: true
+      telemetry: true
+      telemetry_strict: true
+
+  - id: obs-batch
+    display_name: Batch Telemetry
+    request:
+      prompt: Summarize a batch of ops notes into three risk themes.
+      use_case_hint: batch-summarization
+      serving_pattern: batch
+    policy_context:
+      lifecycle: production
+    expected:
+      classification:
+        use_case: batch-summarization
+      routing:
+        preferred_compute_family: [epyc, instinct]
+    validation:
+      classification: true
+      route: true
+      telemetry: true
+      telemetry_strict: true
+
+  - id: obs-fallback
+    display_name: Fallback Telemetry
+    request:
+      prompt: Implement merge sort in Python with clear comments.
+      use_case_hint: coding-assistant
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    inject:
+      - preferred-endpoint-unavailable
+    expected:
+      classification:
+        use_case: coding-assistant
+      routing:
+        preferred_compute_family: [instinct]
+    validation:
+      classification: true
+      route: true
+      endpoint: true
+      telemetry: true
+      telemetry_strict: true

@@ -1,0 +1,214 @@
+# Enterprise mixed workload distribution — configurable mix weights (not score weights).
+id: enterprise-mixed
+display_name: Enterprise Mixed
+description: >
+  Representative mix across enterprise AI workload classes with seeded reproducibility.
+  Mix percentages describe traffic composition for policy validation, not performance score weights.
+generate_count: 40
+mix:
+  coding-assistant: 0.20
+  enterprise-chat: 0.20
+  complex-reasoning: 0.15
+  rag-simple: 0.15
+  batch-summarization: 0.15
+  domain-specific-assistant: 0.05
+  vlm: 0.05
+  tool-use-agent: 0.05
+coverage:
+  use_cases:
+    - coding-assistant
+    - enterprise-chat
+    - complex-reasoning
+    - rag-simple
+    - batch-summarization
+    - domain-specific-assistant
+    - vlm
+    - tool-use-agent
+  serving_patterns:
+    - interactive
+    - batch
+    - online-throughput
+  features:
+    - mixed-distribution
+    - seed-reproducible
+scenarios:
+  - id: mix-coding
+    display_name: Coding
+    mix_key: coding-assistant
+    request:
+      prompts:
+        - Write a Python function for a thread-safe LRU cache.
+        - Explain how to implement a lock-free queue in C++.
+        - Refactor this REST handler to validate inputs safely.
+      use_case_hint: coding-assistant
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    expected:
+      classification:
+        use_case: coding-assistant
+      capabilities:
+        required: [coding]
+      routing:
+        preferred_compute_family: [instinct]
+        require_production_eligible: true
+    validation:
+      classification: true
+      capability_fit: true
+      lifecycle: true
+      route: true
+
+  - id: mix-chat
+    display_name: General Chat
+    mix_key: enterprise-chat
+    request:
+      prompts:
+        - Draft a short enterprise FAQ answer about semantic routing.
+        - Summarize benefits of a single virtual model for operators.
+      use_case_hint: enterprise-chat
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    expected:
+      classification:
+        use_case: enterprise-chat
+      routing:
+        require_production_eligible: true
+    validation:
+      classification: true
+      lifecycle: true
+      route: true
+
+  - id: mix-reasoning
+    display_name: Reasoning
+    mix_key: complex-reasoning
+    request:
+      prompts:
+        - Reason carefully about trade-offs in multi-tier capacity planning.
+        - Provide a structured analysis of failover strategies under partial outage.
+      use_case_hint: complex-reasoning
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    expected:
+      classification:
+        use_case: complex-reasoning
+      capabilities:
+        required: [reasoning]
+      routing:
+        preferred_compute_family: [instinct]
+        require_production_eligible: true
+    validation:
+      classification: true
+      capability_fit: true
+      route: true
+
+  - id: mix-rag
+    display_name: RAG / Document QA
+    mix_key: rag-simple
+    request:
+      prompts:
+        - Answer from the policy excerpts whether Tech Preview AIMs are production-eligible.
+        - What does the routing policy say about locality for private assistants?
+      use_case_hint: rag-simple
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    expected:
+      classification:
+        use_case: rag-simple
+      routing:
+        require_production_eligible: true
+    validation:
+      classification: true
+      route: true
+
+  - id: mix-batch
+    display_name: Batch Processing
+    mix_key: batch-summarization
+    request:
+      prompts:
+        - Batch-summarize these tickets into themes for offline review.
+        - Extract action items from this overnight document batch.
+      use_case_hint: batch-summarization
+      serving_pattern: batch
+      objective: lowest-cost-sufficient
+    policy_context:
+      lifecycle: production
+      traffic: low
+    expected:
+      classification:
+        use_case: batch-summarization
+      routing:
+        preferred_compute_family: [epyc, instinct]
+        compute_family_tendency: epyc
+    validation:
+      classification: true
+      route: true
+
+  - id: mix-local
+    display_name: Local / Private
+    mix_key: domain-specific-assistant
+    request:
+      prompts:
+        - Keep this note on my local private assistant.
+      use_case_hint: domain-specific-assistant
+      serving_pattern: interactive
+      objective: edge-local
+    policy_context:
+      lifecycle: production
+      locality: local
+    expected:
+      classification:
+        use_case: domain-specific-assistant
+      routing:
+        require_local: true
+        preferred_compute_family: [radeon]
+        allow_no_runtime: true
+    validation:
+      classification: true
+      route: true
+
+  - id: mix-vlm
+    display_name: Multimodal
+    mix_key: vlm
+    request:
+      prompts:
+        - Describe the components visible in this architecture diagram image.
+      use_case_hint: vlm
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: evaluation
+    expected:
+      classification:
+        use_case: vlm
+      capabilities:
+        required: [vision]
+      routing:
+        preferred_compute_family: [radeon, instinct]
+        allow_no_runtime: true
+    validation:
+      classification: true
+      capability_fit: true
+      route: true
+
+  - id: mix-agent
+    display_name: Agentic / Tool Use
+    mix_key: tool-use-agent
+    request:
+      prompts:
+        - Plan tool calls to inspect inventory, then propose a safe remediation sequence.
+      use_case_hint: tool-use-agent
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    expected:
+      classification:
+        use_case: tool-use-agent
+      capabilities:
+        required: [tool-use]
+      routing:
+        require_production_eligible: true
+    validation:
+      classification: true
+      route: true

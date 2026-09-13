@@ -3,8 +3,25 @@
 ## Stack
 
 - **Prometheus** `v2.55.1` — scrapes Envoy Gateway (`/stats/prometheus:19001`) and Semantic Router (`:9190`)
-- **Grafana** `11.4.0` — dashboard `observability/grafana/token-factory-dashboard.json`
+- **Grafana** `11.4.0` — dashboards:
+  - `observability/grafana/token-factory-dashboard.json` (gateway / SR traffic)
+  - `observability/grafana/token-factory-automated-demo.json` (**Token Factory Automated Demo** — routing-policy validation panels; latency is operational telemetry only)
 - **SR Dashboard** — port 8700 for router-specific views (separate from Grafana)
+
+## Automated Demo metrics
+
+Process-local counters (low cardinality — no request UUID labels):
+
+| Metric | Labels |
+|--------|--------|
+| `token_factory_demo_requests_total` | scenario, use_case, compute_family, model, validation_status |
+| `token_factory_demo_validation_total` | same |
+| `token_factory_demo_fallback_total` | scenario, use_case, compute_family |
+| `token_factory_demo_route_total` | scenario, compute_family, model |
+
+Attributes on each demo request span: `demo_run_id`, `scenario_id`, `request_id`, use case, policy, serving_pattern, lifecycle, model, compute, endpoint, `fallback_used`.
+
+See [automated-demo.md](automated-demo.md). Soft gap: dashboard JSON is importable; live scrape needs a metrics exporter wired to the demo instrumentor.
 
 Prometheus uses a dedicated ServiceAccount with ClusterRole access to list pods in
 `envoy-gateway-system` and `vllm-semantic-router-system`. Without that RBAC, Grafana

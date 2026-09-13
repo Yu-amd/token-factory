@@ -1,4 +1,4 @@
-.PHONY: help preflight install apply verify test demo status dashboard grafana logs reset uninstall update-aim-catalog compile ports ui smoke-ui recommend lint
+.PHONY: help preflight install apply verify test demo status dashboard grafana logs reset uninstall update-aim-catalog compile ports ui smoke-ui recommend lint demo-smoke
 
 REPO_ROOT := $(shell pwd)
 VENV := $(REPO_ROOT)/.venv
@@ -15,10 +15,11 @@ help:
 	@echo "  verify               Check deployments"
 	@echo "  test                 Run unit tests"
 	@echo "  demo                 Compile + run mock backend locally"
+	@echo "  demo-smoke           Automated Demo smoke pack (mock adapters; policy validation)"
 	@echo "  status               CLI health checks"
 	@echo "  dashboard            Port-forward + verify SR dashboard"
 	@echo "  ports                Start tracked port-forwards (:18080 gateway, :8081 SR API, …)"
-	@echo "  ui                   Launch Streamlit UI (Playground, Matrix, Policies, …)"
+	@echo "  ui                   Launch Streamlit UI (Playground, Automated Demo, Matrix, …)"
 	@echo "  smoke-ui             Smoke-test Playground streaming path"
 	@echo "  recommend            AMD Opinionated Routing (USE_CASE=… OBJECTIVE=…; see token-factory recommend -h)"
 	@echo "  logs                 Tail semantic-router logs"
@@ -42,11 +43,14 @@ verify:
 	$(PY) -m token_factory.cli.main verify
 
 test:
-	$(PY) -m pytest tests/unit -q
+	$(PY) -m pytest tests/unit tests/integration -q
 
 demo: compile
 	@echo "Starting mock backend on :8000 (Ctrl+C to stop)"
 	$(PY) tests/mock_backends/server.py
+
+demo-smoke:
+	$(PY) -m token_factory.cli.main demo run --pack smoke --ci --mock
 
 status:
 	$(PY) -m token_factory.cli.main status

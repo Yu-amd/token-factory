@@ -1,0 +1,273 @@
+# Smoke pack — fast routing-policy validation across major paths.
+# Not a benchmark. Not a performance shootout.
+id: smoke
+display_name: Smoke
+description: >
+  Fast validation of major Token Factory routing paths — classification,
+  AMD policy eligibility, lifecycle, locality, multimodal, and fallback.
+  Request count is kept small for CI and operator smoke checks.
+coverage:
+  use_cases:
+    - coding-assistant
+    - complex-reasoning
+    - enterprise-chat
+    - batch-summarization
+    - domain-specific-assistant
+    - vlm
+  serving_patterns:
+    - interactive
+    - batch
+  features:
+    - lifecycle
+    - fallback
+    - locality
+    - multimodal
+scenarios:
+  - id: interactive-coding
+    display_name: Interactive Coding
+    request:
+      prompt: >
+        Write a Python function that implements an LRU cache with thread-safe access.
+      use_case_hint: coding-assistant
+      serving_pattern: interactive
+      objective: balanced
+    policy_context:
+      lifecycle: production
+      deployment: enterprise
+      locality: any
+      traffic: medium
+    expected:
+      classification:
+        use_case: coding-assistant
+      capabilities:
+        required: [coding]
+      routing:
+        preferred_compute_family: [instinct]
+        compute_family_tendency: instinct
+        require_production_eligible: true
+    validation:
+      classification: true
+      capability_fit: true
+      lifecycle: true
+      route: true
+      telemetry: true
+
+  - id: complex-reasoning
+    display_name: Complex Reasoning
+    request:
+      prompt: >
+        Reason step by step: if a fleet has 3 racks and each rack doubles capacity
+        every generation, how should we think about capacity planning trade-offs?
+      use_case_hint: complex-reasoning
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+      traffic: medium
+    expected:
+      classification:
+        use_case: complex-reasoning
+      capabilities:
+        required: [reasoning]
+      routing:
+        preferred_compute_family: [instinct]
+        compute_family_tendency: instinct
+        require_production_eligible: true
+    validation:
+      classification: true
+      capability_fit: true
+      lifecycle: true
+      route: true
+
+  - id: enterprise-chat
+    display_name: General Enterprise Chat
+    request:
+      prompt: >
+        Draft a short status update for an enterprise AI platform rollout to stakeholders.
+      use_case_hint: enterprise-chat
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+      traffic: medium
+    expected:
+      classification:
+        use_case: enterprise-chat
+      capabilities:
+        required: [text-generation]
+      routing:
+        require_production_eligible: true
+    validation:
+      classification: true
+      lifecycle: true
+      route: true
+
+  - id: batch-summarization
+    display_name: Batch Summarization
+    request:
+      prompt: >
+        Summarize these batch documents into executive bullets covering risks,
+        owners, and next steps for offline processing.
+      use_case_hint: batch-summarization
+      serving_pattern: batch
+      objective: lowest-cost-sufficient
+    policy_context:
+      lifecycle: production
+      traffic: low
+    expected:
+      classification:
+        use_case: batch-summarization
+      capabilities:
+        required: [text-generation]
+      routing:
+        # Soft tendency — EPYC may become valid for batch; not a hard requirement
+        compute_family_tendency: epyc
+        preferred_compute_family: [epyc, instinct]
+        require_production_eligible: true
+    validation:
+      classification: true
+      lifecycle: true
+      route: true
+
+  - id: local-private-assistant
+    display_name: Local Private Assistant
+    request:
+      prompt: >
+        Help me draft a private note that should stay on my local workstation assistant.
+      use_case_hint: domain-specific-assistant
+      serving_pattern: interactive
+      objective: edge-local
+    policy_context:
+      lifecycle: production
+      locality: local
+      traffic: low
+    expected:
+      classification:
+        use_case: domain-specific-assistant
+      routing:
+        require_local: true
+        preferred_compute_family: [radeon]
+        compute_family_tendency: radeon
+        allow_no_runtime: true
+    validation:
+      classification: true
+      route: true
+      lifecycle: true
+
+  - id: local-multimodal
+    display_name: Local Multimodal Assistant
+    request:
+      prompt: >
+        Describe what is visible in this architecture diagram image and list the
+        multimodal components shown.
+      use_case_hint: vlm
+      serving_pattern: interactive
+      objective: edge-local
+    policy_context:
+      lifecycle: evaluation
+      locality: local
+    expected:
+      classification:
+        use_case: vlm
+      capabilities:
+        required: [vision, multimodal]
+      routing:
+        preferred_compute_family: [radeon, instinct]
+        compute_family_tendency: radeon
+        allow_no_runtime: true
+    validation:
+      classification: true
+      capability_fit: true
+      route: true
+
+  - id: preferred-endpoint-fallback
+    display_name: Preferred Endpoint Fallback
+    request:
+      prompt: >
+        Implement a binary search in Rust with clear error handling comments.
+      use_case_hint: coding-assistant
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    inject:
+      - preferred-endpoint-unavailable
+    expected:
+      classification:
+        use_case: coding-assistant
+      capabilities:
+        required: [coding]
+      routing:
+        preferred_compute_family: [instinct]
+        require_production_eligible: true
+    validation:
+      classification: true
+      capability_fit: true
+      lifecycle: true
+      route: true
+      endpoint: true
+
+  - id: lifecycle-tp-exclusion
+    display_name: Production Lifecycle Exclusion
+    request:
+      prompt: >
+        Review this coding assistant request under strict production lifecycle rules.
+      use_case_hint: coding-assistant
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    inject:
+      - lifecycle-restriction
+    expected:
+      classification:
+        use_case: coding-assistant
+      lifecycle_exclusion: true
+      routing:
+        require_production_eligible: true
+        preferred_compute_family: [instinct]
+    validation:
+      classification: true
+      lifecycle: true
+      route: true
+
+  - id: rag-document-qa
+    display_name: RAG / Document Q&A
+    request:
+      prompt: >
+        Using the retrieved enterprise policy excerpts, answer whether preview AIMs
+        may be used in production routes.
+      use_case_hint: rag-simple
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    expected:
+      classification:
+        use_case: rag-simple
+      capabilities:
+        required: [text-generation]
+      routing:
+        require_production_eligible: true
+    validation:
+      classification: true
+      lifecycle: true
+      route: true
+
+  - id: high-concurrency-chat
+    display_name: High-Concurrency Online Serving
+    request:
+      prompt: >
+        Provide a concise FAQ answer suitable for a high-concurrency enterprise chat
+        service endpoint.
+      use_case_hint: enterprise-chat
+      serving_pattern: online-throughput
+    policy_context:
+      lifecycle: production
+      traffic: high
+    expected:
+      classification:
+        use_case: enterprise-chat
+      routing:
+        preferred_compute_family: [instinct]
+        compute_family_tendency: instinct
+        require_production_eligible: true
+    validation:
+      classification: true
+      lifecycle: true
+      route: true

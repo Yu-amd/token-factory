@@ -1,0 +1,85 @@
+# Explicit fallback validation — preferred endpoint unavailable overlay.
+# Does not mutate canonical policy or permanent endpoint inventory.
+id: fallback
+display_name: Fallback Validation
+description: >
+  Controlled failure injection marks the preferred endpoint unavailable so the
+  runner selects the next eligible runtime candidate. Policy remains authoritative.
+coverage:
+  use_cases:
+    - coding-assistant
+    - enterprise-chat
+  features:
+    - fallback
+    - endpoint-selection
+scenarios:
+  - id: fallback-coding-preferred-down
+    display_name: Coding Preferred Endpoint Unavailable
+    request:
+      prompt: >
+        Write a Python binary search with unit-test sketches and clear comments.
+      use_case_hint: coding-assistant
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    inject:
+      - preferred-endpoint-unavailable
+    expected:
+      classification:
+        use_case: coding-assistant
+      capabilities:
+        required: [coding]
+      routing:
+        preferred_compute_family: [instinct]
+        require_production_eligible: true
+    validation:
+      classification: true
+      capability_fit: true
+      lifecycle: true
+      route: true
+      endpoint: true
+
+  - id: fallback-chat-preferred-down
+    display_name: Chat Preferred Endpoint Unavailable
+    request:
+      prompt: >
+        Provide a concise operator note explaining virtual-model routing.
+      use_case_hint: enterprise-chat
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    inject:
+      - preferred-endpoint-unavailable
+    expected:
+      classification:
+        use_case: enterprise-chat
+      routing:
+        require_production_eligible: true
+    validation:
+      classification: true
+      route: true
+      endpoint: true
+
+  - id: fallback-no-radeon-local
+    display_name: No Radeon Available (local preference)
+    request:
+      prompt: Keep this private coaching note on a local assistant if available.
+      use_case_hint: domain-specific-assistant
+      serving_pattern: interactive
+      objective: edge-local
+    policy_context:
+      lifecycle: production
+      locality: local
+    inject:
+      - no-radeon
+      - no-local
+    expected:
+      classification:
+        use_case: domain-specific-assistant
+      routing:
+        require_local: true
+        preferred_compute_family: [radeon]
+        allow_no_runtime: true
+    validation:
+      classification: true
+      route: true

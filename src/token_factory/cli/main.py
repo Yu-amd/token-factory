@@ -41,7 +41,11 @@ from token_factory.version import PINNED_VERSIONS, VIRTUAL_MODEL
 
 app = typer.Typer(name="token-factory", help="AMD Token Factory reference architecture CLI")
 policy_app = typer.Typer(help="AMD Canonical Routing Policy commands")
+demo_app = typer.Typer(
+    help="Automated Demo — routing-policy & observability validation (not a benchmark)"
+)
 app.add_typer(policy_app, name="policy")
+app.add_typer(demo_app, name="demo")
 console = Console()
 
 
@@ -902,6 +906,195 @@ def ui() -> None:
         cwd=str(ui_dir),
         check=False,
     )
+
+
+@demo_app.command("plan")
+def demo_plan(
+    pack: str = typer.Option("smoke", "--pack", "-p", help="Scenario pack id"),
+    seed: int | None = typer.Option(None, "--seed", help="Seed for mixed packs"),
+    requests: int | None = typer.Option(None, "--requests", help="Max planned requests"),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Dry-run: show scenarios / expected policy tendencies without sending traffic."""
+    from token_factory.demo import DemoRunner
+
+    plan = DemoRunner(mock=True).plan(pack, seed=seed, requests=requests)
+    if json_out:
+        console.print_json(data=plan)
+        return
+    console.print(
+        Panel.fit(
+            f"[bold]Automated Demo Plan[/bold] · {plan.get('display_name')} ({plan['pack_id']})\n"
+            f"{plan.get('description', '')}\n"
+            f"Scenarios in pack: {plan.get('scenario_count')} · "
+            f"Planned requests: {plan.get('planned_requests')}\n"
+            f"[dim]Validates routing-policy execution — not a benchmark[/dim]"
+        )
+    )
+    table = Table(title="Planned requests")
+    table.add_column("#", justify="right")
+    table.add_column("Scenario")
+    table.add_column("Use case")
+    table.add_column("Serving")
+    table.add_column("Compute tendency")
+    table.add_column("Inject")
+    for i, sc in enumerate(plan.get("scenarios") or [], start=1):
+        fam = sc.get("preferred_compute_family")
+        if isinstance(fam, list):
+            fam = ",".join(str(x) for x in fam)
+        table.add_row(
+            str(i),
+            str(sc.get("display_name") or sc.get("id")),
+            str(sc.get("use_case") or "—"),
+            str(sc.get("serving_pattern") or "—"),
+            str(fam or "—"),
+            ",".join(sc.get("inject") or []) or "—",
+        )
+    console.print(table)
+    cov = plan.get("coverage") or {}
+    if cov:
+        console.print(f"[dim]Coverage: {json.dumps(cov)}[/dim]")
+
+
+@demo_app.command("run")
+def demo_run_cmd(
+    pack: str = typer.Option(
+        "smoke",
+        "--pack",
+        "-p",
+        help="smoke|executive|enterprise-mixed|observability|fallback",
+    ),
+    lifecycle: str = typer.Option("production", "--lifecycle", "-L"),
+    traffic: str = typer.Option(
+        "sequential", "--traffic", "-t", help="sequential|low|medium|high|mixed"
+    ),
+    requests: int | None = typer.Option(None, "--requests", help="Max requests (≤100)"),
+    concurrency: int | None = typer.Option(
+        None, "--concurrency", "-c", help="Bounded concurrency (≤10)"
+    ),
+    seed: int | None = typer.Option(None, "--seed", help="Reproducible mixed packs"),
+    inject: list[str] | None = typer.Option(
+        None,
+        "--inject",
+        help=(
+            "Failure injection (repeatable): preferred-endpoint-unavailable, "
+            "no-radeon, no-epyc, no-local, lifecycle-restriction"
+        ),
+    ),
+    ci: bool = typer.Option(False, "--ci", help="CI mode: exit 0 on policy validations; ignore latency"),
+    mock: bool = typer.Option(
+        False, "--mock", help="Force mock classify/chat adapters (no cluster required)"
+    ),
+    live: bool = typer.Option(False, "--live", help="Force live Gateway/SR adapters"),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Run Automated Demo scenario pack (routing-policy + observability validation)."""
+    from token_factory.demo import DemoRunner
+
+    if mock and live:
+        console.print("[red]Choose at most one of --mock / --live[/red]")
+        raise typer.Exit(2)
+    mock_flag: bool | None
+    if mock:
+        mock_flag = True
+    elif live:
+        mock_flag = False
+    else:
+        mock_flag = True if ci else None
+
+    runner = DemoRunner(mock=mock_flag)
+    run = runner.run(
+        pack,
+        lifecycle=lifecycle,
+        traffic=traffic,
+        requests=requests,
+        concurrency=concurrency,
+        seed=seed,
+        inject=list(inject or []),
+        ci=ci,
+        mock=mock_flag,
+    )
+    summary = run.validation_summary or {}
+    if json_out:
+        console.print_json(data=run.to_dict())
+    elif ci:
+        console.print("Token Factory Policy Validation")
+        console.print(f"{summary.get('requests', 0)} requests")
+        dims = summary.get("dimensions") or {}
+        for label, key in (
+            ("classified", "classification"),
+            ("policy-valid", "policy"),
+            ("capability-valid", "capability"),
+            ("lifecycle-valid", "lifecycle"),
+        ):
+            passed = (dims.get(key) or {}).get("PASS", 0)
+            console.print(f"{passed} {label}")
+        console.print(f"{summary.get('fallbacks', 0)} fallback")
+        tel_pass = (dims.get("telemetry") or {}).get("PASS", 0)
+        console.print(f"{tel_pass} telemetry emitted")
+        console.print("PASS" if summary.get("policy_ok") else "FAIL")
+    else:
+        console.print(
+            Panel.fit(
+                f"[bold]Automated Demo[/bold] · {run.scenario_pack}\n"
+                f"Run ID     {run.id}\n"
+                f"Lifecycle  {run.lifecycle_mode} · traffic {run.traffic_profile}\n"
+                f"Requests   {summary.get('requests')} · "
+                f"passed {summary.get('passed')} · "
+                f"warnings {summary.get('warnings')} · "
+                f"failed {summary.get('failed')} · "
+                f"fallbacks {summary.get('fallbacks')}\n"
+                f"Mock       {run.mock} · artifact {run.meta.get('artifact', '—')}\n"
+                f"[dim]Routing-policy validation — not a benchmark[/dim]"
+            )
+        )
+        table = Table(title="Request results")
+        table.add_column("#", justify="right")
+        table.add_column("Status")
+        table.add_column("Scenario")
+        table.add_column("Model / Compute")
+        table.add_column("Fallback")
+        for r in run.requests:
+            a = r.actual or {}
+            model = a.get("selected_model") or "—"
+            compute = a.get("selected_compute") or ""
+            table.add_row(
+                str(r.index + 1),
+                r.overall().value,
+                r.display_name or r.scenario_id,
+                f"{model} / {compute}".strip(" /"),
+                "yes" if a.get("fallback_used") else "",
+            )
+        console.print(table)
+
+    if ci and not summary.get("policy_ok"):
+        raise typer.Exit(1)
+
+
+@demo_app.command("list")
+def demo_list(
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """List available Automated Demo scenario packs."""
+    from token_factory.demo import list_packs
+
+    packs = list_packs()
+    if json_out:
+        console.print_json(data=packs)
+        return
+    table = Table(title="Automated Demo packs")
+    table.add_column("ID")
+    table.add_column("Name")
+    table.add_column("Scenarios", justify="right")
+    table.add_column("Description")
+    for p in packs:
+        table.add_row(
+            p["id"],
+            p.get("display_name") or p["id"],
+            str(p.get("scenario_count") or 0),
+            (p.get("description") or "")[:80],
+        )
+    console.print(table)
 
 
 @app.command()

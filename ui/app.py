@@ -727,9 +727,10 @@ probe_defs = [
 # Bulky global status tiles removed — Playground owns the compact health strip.
 # Other tabs keep normal page scroll; Playground uses fixed-height scroll regions.
 
-tab_chat, tab_matrix, tab_route, tab_arch, tab_inv, tab_pol, tab_ops = st.tabs(
+tab_chat, tab_demo, tab_matrix, tab_route, tab_arch, tab_inv, tab_pol, tab_ops = st.tabs(
     [
         "Playground",
+        "Automated Demo",
         "AMD Routing Matrix",
         "Routing",
         "Architecture",
@@ -756,6 +757,11 @@ with tab_chat:
         extract_reply=extract_reply,
         html=html,
     )
+
+with tab_demo:
+    from views.automated_demo import render_automated_demo_tab
+
+    render_automated_demo_tab(meta=meta, links=links, html=html, section=section)
 
 # ---------------------------------------------------------------------------
 # AMD Opinionated Routing Matrix

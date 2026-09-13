@@ -1,0 +1,149 @@
+{
+  "title": "Token Factory Automated Demo",
+  "uid": "token-factory-automated-demo",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["token-factory", "automated-demo", "routing-policy", "observability"],
+  "description": "Routing-policy and observability validation for Automated Demo traffic. Latency/TTFT panels are operational telemetry only — not comparative hardware performance claims.",
+  "templating": {
+    "list": [
+      {
+        "name": "scenario",
+        "type": "query",
+        "label": "Scenario",
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "query": "label_values(token_factory_demo_requests_total, scenario)",
+        "includeAll": true,
+        "multi": true,
+        "current": {"text": "All", "value": "$__all"}
+      },
+      {
+        "name": "use_case",
+        "type": "query",
+        "label": "Use case",
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "query": "label_values(token_factory_demo_requests_total, use_case)",
+        "includeAll": true,
+        "multi": true,
+        "current": {"text": "All", "value": "$__all"}
+      },
+      {
+        "name": "compute_family",
+        "type": "query",
+        "label": "Compute family",
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "query": "label_values(token_factory_demo_requests_total, compute_family)",
+        "includeAll": true,
+        "multi": true,
+        "current": {"text": "All", "value": "$__all"}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Demo requests by use case",
+      "description": "Coverage of classified use cases — not a performance ranking.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "sum by (use_case) (rate(token_factory_demo_requests_total{scenario=~\"$scenario\",use_case=~\"$use_case\",compute_family=~\"$compute_family\"}[5m]))",
+          "legendFormat": "{{use_case}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Demo requests by model",
+      "description": "Selected model distribution for policy validation coverage.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "sum by (model) (rate(token_factory_demo_route_total{scenario=~\"$scenario\",compute_family=~\"$compute_family\"}[5m]))",
+          "legendFormat": "{{model}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Requests by compute family",
+      "description": "Instinct / EPYC / Radeon routing coverage — not a hardware shootout.",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "targets": [
+        {
+          "expr": "sum by (compute_family) (token_factory_demo_requests_total{scenario=~\"$scenario\",use_case=~\"$use_case\"})",
+          "legendFormat": "{{compute_family}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Validation status",
+      "description": "PASS / WARN / FAIL counts from Automated Demo policy validation.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "targets": [
+        {
+          "expr": "sum by (validation_status) (rate(token_factory_demo_validation_total{scenario=~\"$scenario\"}[5m]))",
+          "legendFormat": "{{validation_status}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Fallback count",
+      "description": "Preferred-endpoint unavailable / next eligible candidate selections.",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "targets": [
+        {
+          "expr": "sum(increase(token_factory_demo_fallback_total{scenario=~\"$scenario\"}[1h]))",
+          "legendFormat": "fallbacks"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Gateway request rate (context)",
+      "description": "Operational Envoy traffic context while demos run.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "targets": [
+        {
+          "expr": "sum(rate(envoy_http_downstream_rq_total[5m]))",
+          "legendFormat": "downstream rps"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Upstream latency p95 (telemetry only)",
+      "description": "Operational TTFT/latency telemetry — do not use for comparative hardware claims.",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(envoy_cluster_upstream_rq_time_bucket[5m])) by (le))",
+          "legendFormat": "p95 ms"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Route failures / 5xx (context)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+      "targets": [
+        {
+          "expr": "sum(rate(envoy_http_downstream_rq_xx{envoy_response_code_class=\"5\"}[5m]))",
+          "legendFormat": "5xx"
+        }
+      ]
+    }
+  ]
+}

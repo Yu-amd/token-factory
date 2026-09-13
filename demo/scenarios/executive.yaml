@@ -1,0 +1,201 @@
+# Executive Demo — intentional Token Factory routing story sequence.
+# Visual diversity of policy behavior — not a hardware shootout.
+id: executive
+display_name: Executive Demo
+description: >
+  Story sequence for executive demos: Instinct coding tendency, Radeon local,
+  EPYC batch tendency, reasoning, VLM, fallback, and Tech Preview lifecycle exclusion.
+coverage:
+  use_cases:
+    - coding-assistant
+    - domain-specific-assistant
+    - batch-summarization
+    - complex-reasoning
+    - vlm
+  serving_patterns:
+    - interactive
+    - batch
+  features:
+    - locality
+    - fallback
+    - lifecycle
+    - multimodal
+scenarios:
+  - id: exec-coding-instinct
+    display_name: Interactive Coding → Instinct tendency
+    story: instinct-coding
+    request:
+      prompt: >
+        Write a production-ready Python LRU cache with TTL and thread safety.
+      use_case_hint: coding-assistant
+      serving_pattern: interactive
+      objective: balanced
+    policy_context:
+      lifecycle: production
+      deployment: enterprise
+      traffic: medium
+    expected:
+      classification:
+        use_case: coding-assistant
+      capabilities:
+        required: [coding]
+      routing:
+        preferred_compute_family: [instinct]
+        compute_family_tendency: instinct
+        require_production_eligible: true
+    validation:
+      classification: true
+      capability_fit: true
+      lifecycle: true
+      route: true
+
+  - id: exec-local-radeon
+    display_name: Local Private Assistant → Radeon where capable
+    story: radeon-local
+    request:
+      prompt: >
+        Keep this coaching note private on my local workstation assistant.
+      use_case_hint: domain-specific-assistant
+      serving_pattern: interactive
+      objective: edge-local
+    policy_context:
+      lifecycle: production
+      locality: local
+      traffic: low
+    expected:
+      classification:
+        use_case: domain-specific-assistant
+      routing:
+        require_local: true
+        preferred_compute_family: [radeon]
+        compute_family_tendency: radeon
+        allow_no_runtime: true
+    validation:
+      classification: true
+      route: true
+
+  - id: exec-batch-epyc
+    display_name: Batch Document Processing → EPYC may become valid
+    story: epyc-batch
+    request:
+      prompt: >
+        Batch-summarize overnight incident reports into risk themes for offline review.
+      use_case_hint: batch-summarization
+      serving_pattern: batch
+      objective: lowest-cost-sufficient
+    policy_context:
+      lifecycle: production
+      traffic: low
+    expected:
+      classification:
+        use_case: batch-summarization
+      routing:
+        compute_family_tendency: epyc
+        preferred_compute_family: [epyc, instinct]
+        require_production_eligible: true
+    validation:
+      classification: true
+      lifecycle: true
+      route: true
+
+  - id: exec-reasoning-instinct
+    display_name: Complex Reasoning → Instinct
+    story: instinct-reasoning
+    request:
+      prompt: >
+        Provide a structured multi-step analysis of capacity planning under uncertain demand.
+      use_case_hint: complex-reasoning
+      serving_pattern: interactive
+      objective: quality
+    policy_context:
+      lifecycle: production
+      traffic: medium
+    expected:
+      classification:
+        use_case: complex-reasoning
+      capabilities:
+        required: [reasoning]
+      routing:
+        preferred_compute_family: [instinct]
+        compute_family_tendency: instinct
+        require_production_eligible: true
+    validation:
+      classification: true
+      capability_fit: true
+      lifecycle: true
+      route: true
+
+  - id: exec-vlm-radeon
+    display_name: Local Multimodal → Radeon VLM where capable
+    story: radeon-vlm
+    request:
+      prompt: >
+        Inspect this whiteboard photo and extract the multimodal pipeline stages shown.
+      use_case_hint: vlm
+      serving_pattern: interactive
+      objective: edge-local
+    policy_context:
+      lifecycle: evaluation
+      locality: local
+    expected:
+      classification:
+        use_case: vlm
+      capabilities:
+        required: [vision]
+      routing:
+        preferred_compute_family: [radeon, instinct]
+        compute_family_tendency: radeon
+        allow_no_runtime: true
+    validation:
+      classification: true
+      capability_fit: true
+      route: true
+
+  - id: exec-fallback
+    display_name: Preferred Endpoint Failure → fallback
+    story: fallback
+    request:
+      prompt: >
+        Refactor this coding helper to use a clearer API and add unit-test sketches.
+      use_case_hint: coding-assistant
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    inject:
+      - preferred-endpoint-unavailable
+    expected:
+      classification:
+        use_case: coding-assistant
+      capabilities:
+        required: [coding]
+      routing:
+        preferred_compute_family: [instinct]
+        require_production_eligible: true
+    validation:
+      classification: true
+      capability_fit: true
+      route: true
+      endpoint: true
+
+  - id: exec-lifecycle-tp
+    display_name: Production Lifecycle → Tech Preview excluded
+    story: lifecycle-exclusion
+    request:
+      prompt: >
+        Recommend a coding assistant deployment under strict Production lifecycle mode.
+      use_case_hint: coding-assistant
+      serving_pattern: interactive
+    policy_context:
+      lifecycle: production
+    inject:
+      - lifecycle-restriction
+    expected:
+      classification:
+        use_case: coding-assistant
+      lifecycle_exclusion: true
+      routing:
+        require_production_eligible: true
+    validation:
+      classification: true
+      lifecycle: true
+      route: true

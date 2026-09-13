@@ -13,6 +13,7 @@ make ui       # http://localhost:8501  (runs from ui/ so .streamlit/config.toml 
 | Tab | Purpose |
 |-----|---------|
 | **Playground** | Compact operator/demo console — live flow, chat, route inspector |
+| **Automated Demo** | Scenario packs validating classification, AMD policy, fallback, observability (**not** a benchmark) |
 | **AMD Routing Matrix** | Opinionated SHOULD-RUN rankings (Instinct / EPYC / Radeon) + live overlay |
 | **Routing** | Compiled domain → AIM routes |
 | **Architecture** | Control-path diagram |
@@ -20,7 +21,7 @@ make ui       # http://localhost:8501  (runs from ui/ so .streamlit/config.toml 
 | **Policies** | AMD Opinionated Routing Policy — eligibility, compute positioning, objectives, coverage, Explain Policy |
 | **Operations** | Links to SR Dashboard / Grafana / Prometheus |
 
-See [policy-model.md](policy-model.md) and [amd-routing-matrix.md](amd-routing-matrix.md).
+See [policy-model.md](policy-model.md), [amd-routing-matrix.md](amd-routing-matrix.md), and [automated-demo.md](automated-demo.md).
 
 ## Playground layout
 
