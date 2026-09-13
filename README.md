@@ -12,9 +12,9 @@ Repository: https://github.com/Yu-amd/token-factory
 - **Python CLI** (`token-factory`): preflight, compile, install, verify, ports, UI, route explain
 - **Policy profiles**: balanced, quality, cost-efficient, low-latency, edge-first, enterprise
 - **AIM catalog** from AMD Enterprise AI accelerator matrix
-- **Streamlit UI** — Playground with **live TTFT**, **Automated Demo**, **AMD Routing Matrix**, **Policies** (canonical policy explorer), routing, architecture, inventory, operations
-- **AMD Opinionated Routing** — one canonical policy (`policies/amd-policy.yaml`) shared by Matrix, Explain Policy, simulation, and compile (`token-factory recommend` / `token-factory policy` / `token-factory evidence`) — see [docs/policy-evidence.md](docs/policy-evidence.md)
-- **Automated Demo** — declarative scenario packs that validate classification, policy, fallback, and observability (`token-factory demo`) — **not** a benchmark portal
+- **Streamlit UI** — Playground operator console (**live TTFT**), **Automated Demo**, **AMD Routing Matrix** (Portfolio / Executive), **Policies** (canonical policy explorer), routing, architecture, inventory, operations
+- **AMD Opinionated Routing** — canonical policy **v2.4** (`policies/amd-policy.yaml`) shared by Matrix, Explain Policy, simulation, and compile (`token-factory recommend` / `token-factory policy` / `token-factory evidence`) — see [docs/policy-evidence.md](docs/policy-evidence.md)
+- **Automated Demo** — declarative scenario packs that validate classification, policy, injected fallback vs runtime escalation, and observability (`token-factory demo`) — **not** a benchmark portal
 - **Mock OpenAI backends** for kind/CI without GPU
 - **Clean port-forward manager** with PID tracking (no blind `pkill kubectl`)
 
@@ -29,7 +29,9 @@ token-factory demo run --pack executive --mock
 token-factory demo run --pack smoke --ci --mock     # exit 0 on policy PASS
 ```
 
-Validates classification, AMD canonical policy eligibility, lifecycle, capability, route/endpoint selection, fallback injection, and telemetry attributes. Latency may be recorded as telemetry only — never as comparative hardware claims.
+Validates classification, AMD canonical policy eligibility, lifecycle, capability, route/endpoint selection, and telemetry attributes. Latency may be recorded as telemetry only — never as comparative hardware claims.
+
+**Availability signals (distinct):** injected preferred-endpoint failure → `token_factory_demo_fallback_total`; preferred model×compute not deployed → next eligible endpoint via `token_factory_demo_runtime_escalation_total` (availability routing, not a performance claim).
 
 Demo counters (`token_factory_demo_*`) are served on **`:9108/metrics`** (`make ui` starts the metrics server; Prometheus job `token-factory-demo` scrapes it). Grafana **Token Factory Automated Demo** panels use those series — no SR intent placeholder. Details: [docs/automated-demo.md](docs/automated-demo.md), [docs/observability.md](docs/observability.md).
 

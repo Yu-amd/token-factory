@@ -17,7 +17,9 @@
 - Semantic Router **dashboard** enabled and reachable at http://localhost:8700 (`token-factory dashboard` → HTTP 200)
 - Grafana (:3000) and Prometheus (:9090) healthy via port-forward
 - Python CLI, Makefile, unit tests (10 passed), CI workflow
-- Three operational views: Token Factory UI (`make ui`, live AIM streaming), SR dashboard (:8700), Grafana (:3000)
+- Three operational views: Token Factory UI (`make ui`, live AIM streaming + Automated Demo), SR dashboard (:8700), Grafana (:3000)
+- Automated Demo metrics on host **`:9108/metrics`** (Prometheus job `token-factory-demo`); Grafana **Token Factory Automated Demo** distinguishes runtime escalation vs injected fallback
+- Portfolio Matrix (full AIM catalog) vs Executive View; policy evidence governance (v2.4) without fabricated AMD benchmarks
 
 ---
 
@@ -248,7 +250,7 @@ Shipped as an additive layer on V1 (no gateway rebuild):
 - Catalogs: `compute.yaml`, `use-cases.yaml`, `models.yaml`, `cost-model.yaml`, `amd-routing-policy.yaml` (`aims.yaml` remains authoritative for GA CAN RUN)
 - Extensions: `aims-tech-preview.yaml` (MI350P TP), `model-aliases.yaml`, lifecycle modes, **Lowest-Cost Sufficient**, Radeon Preview lifecycle=`preview`
 - Engine + CLI: `token_factory.routing_matrix` / `token-factory recommend --lifecycle …` / `make recommend`
-- UI: **AMD Routing Matrix** opens at controls (no hero); MI350P column, lifecycle selector, Serving Pattern, distinct Best Performance / Balance / Lowest-Cost Sufficient cards; mark legend + private-eval note **above** the table; Preview/TP cells tagged `eval` (visible under Production, not blank). **Policies** tab is the deep canonical-policy surface (v2.3).
+- UI: **AMD Routing Matrix** opens at controls (no hero); Portfolio Matrix (full catalog) vs Executive View; MI350P column, lifecycle selector, Serving Pattern, distinct Best Performance / Balance / Lowest-Cost Sufficient cards; mark legend + private-eval note **above** the table; Preview/TP cells tagged `eval` (visible under Production, not blank). **Policies** tab is the deep canonical-policy surface (v2.4). **Automated Demo** tab for policy/observability validation.
 - Docs: [docs/amd-routing-matrix.md](docs/amd-routing-matrix.md), [docs/routing-economics.md](docs/routing-economics.md), [docs/ui.md](docs/ui.md)
 - Compile embeds light `routing_matrix` metadata in `ui-metadata.json` (objective alias only)
 
