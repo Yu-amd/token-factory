@@ -1156,7 +1156,9 @@ with tab_matrix:
             )
             html(
                 f"""
-                <div style="overflow-x:auto;border:1px solid #333;border-radius:0.5rem;background:#141414;margin:0.5rem 0 1rem;">
+                <p style="color:#666;font-size:0.78rem;margin:0.5rem 0 0.35rem;">★ Preferred · ② ③ numbered top candidates only · ✓ Acceptable · ○ Supported · ⊘ Lifecycle-excluded · — Not eligible · ● Live · Full rank/score in cell detail</p>
+                <p style="color:#999;font-size:0.78rem;margin:0 0 0.65rem;"><sup style="color:#c4a35a;">eval</sup> = available via <strong style="color:#bbb;font-weight:500;">private eval container</strong> (Tech Preview / Preview). Under Production these cells stay visible but tagged — not blank — and are not production-eligible. {pe_note}</p>
+                <div style="overflow-x:auto;border:1px solid #333;border-radius:0.5rem;background:#141414;margin:0 0 1rem;">
                   <table style="border-collapse:collapse;width:100%;min-width:860px;">
                     <thead><tr>
                       <th style="padding:0.55rem 0.5rem;text-align:left;color:#666;font-size:0.72rem;">MODEL / AIM</th>
@@ -1165,8 +1167,6 @@ with tab_matrix:
                     <tbody>{''.join(body_rows)}</tbody>
                   </table>
                 </div>
-                <p style="color:#666;font-size:0.78rem;">★ Preferred · ② ③ numbered top candidates only · ✓ Acceptable · ○ Supported · ⊘ Lifecycle-excluded · — Not eligible · ● Live · Full rank/score in cell detail</p>
-                <p style="color:#999;font-size:0.78rem;"><sup style="color:#c4a35a;">eval</sup> = available via <strong style="color:#bbb;font-weight:500;">private eval container</strong> (Tech Preview / Preview). Under Production these cells stay visible but tagged — not blank — and are not production-eligible. {pe_note}</p>
                 """
             )
 

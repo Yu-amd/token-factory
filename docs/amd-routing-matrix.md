@@ -140,8 +140,11 @@ Cards do **not** relabel one global ranking:
 ## Matrix marks
 
 User-facing cells number only the top ~3–5 candidates:
-★ Preferred · ② ③ · ✓ Acceptable · ○ Supported · ⊘ Lifecycle-excluded · — Not eligible.
+★ Preferred · ② ③ · ✓ Acceptable · ○ Supported · ⊘ Lifecycle-excluded · — Not eligible · ● Live.
 Raw score and full rank stay in cell detail JSON.
+
+In the Streamlit Matrix tab the mark legend and private-eval note sit **above** the
+table (not below), so marks are readable before scrolling the grid.
 
 ## Ranking
 
@@ -182,12 +185,13 @@ token-factory recommend -u coding-assistant --simulate -L production
 
 ## UI
 
-Streamlit tab **AMD Routing Matrix**:
+Streamlit tab **AMD Routing Matrix** (`make ui` → tab):
 
 - Controls: Use Case, Objective, Deployment, Lifecycle, Serving Pattern, Traffic, Data Locality, Show, I Have Compute
 - Summary cards: distinct selectors — **BEST PERFORMANCE** | **BEST BALANCE** | **LOWEST-COST SUFFICIENT** (+ **BEST BATCH** / **BEST LOCAL** when relevant)
 - Columns: MI300X · MI325X · **MI350P** · MI350X · MI355X · EPYC · R9700 · W7900 (always retained)
 - Rows: top ranked for the objective **∪** any model with a Preview / Tech Preview cell on MI350P / R9700 / W7900 (so those columns are not empty shells)
+- **Legend + private-eval note above the table** (marks and `eval` explanation before the grid)
 - Cell tags: GA / Preview / Tech Preview
 - **Private-eval superscript** (`<sup>eval</sup>`): Preview / Tech Preview AIM cells are shown as available via **private eval containers** (not silent production GA). Under Lifecycle=Production they stay **visible but tagged** (grey ○ + `eval`), not blank `—`, and remain non–production-eligible. Under Evaluation they show rank marks plus the same badge.
 - Cell detail JSON includes `availability: private-eval` / `deployment_channel: private-eval-container` when applicable

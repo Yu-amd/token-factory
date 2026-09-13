@@ -22,6 +22,18 @@ make ui       # http://localhost:8501  (runs from ui/ so .streamlit/config.toml 
 
 See [amd-routing-matrix.md](amd-routing-matrix.md) for CAN / SHOULD / CAN ROUTE NOW.
 
+## AMD Routing Matrix tab
+
+Opinionated SHOULD-RUN rankings (no fabricated $/token). Key UI cues:
+
+- **Controls** — Use Case, Objective, Deployment, Lifecycle, Serving Pattern, Traffic, Data Locality, Show, I Have Compute
+- **Summary cards** — distinct selectors: Best Performance / Best Balance / Lowest-Cost Sufficient (plus Best Batch / Best Local when relevant)
+- **Legend above the grid** — ★ Preferred · ② ③ · ✓ · ○ · ⊘ · — · ● Live, plus the private-eval note
+- **Private-eval superscript** — Preview / Tech Preview cells stay visible under Production (tagged `eval`, not blank); Evaluation shows rank marks + badge
+- **Columns** — Instinct (incl. MI350P), EPYC, Radeon (R9700 / W7900)
+
+CLI equivalent: `token-factory recommend` / `make recommend` (see [amd-routing-matrix.md](amd-routing-matrix.md)).
+
 ## Playground streaming (live TTFT)
 
 Envoy AI Gateway v0.4.0 typically **buffers** OpenAI `stream: true` until the full
