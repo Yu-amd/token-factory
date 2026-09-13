@@ -3,13 +3,15 @@
   "uid": "token-factory-v1",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "tags": ["token-factory", "semantic-router", "amd"],
+  "description": "Live Envoy AI Gateway + Semantic Router scrape targets. Automated Demo policy counters live on the Token Factory Automated Demo dashboard.",
   "panels": [
     {
       "id": 1,
       "title": "Request Rate",
+      "description": "Envoy downstream request rate (gateway scrape).",
       "type": "timeseries",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
       "targets": [
@@ -22,6 +24,7 @@
     {
       "id": 2,
       "title": "Upstream Latency p95",
+      "description": "Operational latency telemetry — not a hardware benchmark.",
       "type": "timeseries",
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
       "targets": [
@@ -33,7 +36,8 @@
     },
     {
       "id": 3,
-      "title": "Backend Split (by route rule)",
+      "title": "Backend Split (by Envoy cluster)",
+      "description": "Upstream request rate by Envoy cluster name (gateway scrape).",
       "type": "piechart",
       "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
       "targets": [
@@ -46,6 +50,7 @@
     {
       "id": 4,
       "title": "Instinct / EPYC / Radeon Endpoint Health",
+      "description": "Prometheus scrape target health for Envoy Gateway and Semantic Router jobs.",
       "type": "stat",
       "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
       "targets": [
@@ -58,6 +63,7 @@
     {
       "id": 5,
       "title": "Fallback / 5xx Rate",
+      "description": "Envoy downstream 5xx class rate (gateway scrape).",
       "type": "timeseries",
       "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
       "targets": [
@@ -69,14 +75,27 @@
     },
     {
       "id": 6,
-      "title": "Model Intent Mix (SR metrics placeholder)",
+      "title": "SR category / route mix",
       "type": "timeseries",
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
-      "description": "Wire vLLM-SR dashboard metrics or OTel spans for domain/intent breakdown",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "description": "Semantic Router `llm_reasoning_decisions_total` by `category` (e.g. coding_route, general_route). Scraped from router :9190 — not an intent-mix placeholder.",
       "targets": [
         {
-          "expr": "sum(rate(envoy_cluster_upstream_rq_total[5m])) by (envoy_cluster_name)",
-          "legendFormat": "{{envoy_cluster_name}}"
+          "expr": "sum by (category) (rate(llm_reasoning_decisions_total[5m]))",
+          "legendFormat": "{{category}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "SR model selection (by model)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "description": "Semantic Router `llm_model_selection_total` excluding `_init` series. For Automated Demo use-case / compute-family / validation panels, open the Token Factory Automated Demo dashboard.",
+      "targets": [
+        {
+          "expr": "sum by (model) (rate(llm_model_selection_total{model!=\"_init\"}[5m]))",
+          "legendFormat": "{{model}}"
         }
       ]
     }

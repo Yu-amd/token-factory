@@ -123,13 +123,40 @@ Prometheus-style counters (low cardinality — **no request UUID labels**):
 - `token_factory_demo_fallback_total`
 - `token_factory_demo_route_total`
 
-Labels: `scenario`, `use_case`, `compute_family`, `model`, `validation_status`
+Labels: `scenario`, `use_case`, `compute_family`, `model`, `validation_status`, `lifecycle`
+
+### Metrics exposition (`/metrics`)
+
+Demo counters are written to `generated/demo-metrics.prom` and served on
+**`TF_DEMO_METRICS_PORT`** (default **9108**):
+
+```bash
+# Long-lived server (also started by `make ui`)
+python -m token_factory.demo.metrics_server
+
+curl -s http://127.0.0.1:9108/metrics | head
+```
+
+Prometheus scrape job `token-factory-demo` (in `deploy/manifests/observability/prometheus.yaml`)
+targets the kind bridge gateway `172.19.0.1:9108` so in-cluster Prometheus can reach
+the host. If your kind gateway differs:
+
+```bash
+docker network inspect kind -f '{{range .IPAM.Config}}{{.Gateway}}{{"\n"}}{{end}}'
+```
+
+then edit the scrape target and re-apply observability.
 
 ### Grafana
 
-Dashboard definition: [`observability/grafana/token-factory-automated-demo.json`](../observability/grafana/token-factory-automated-demo.json) — **Token Factory Automated Demo**.
+Dashboard definitions:
 
-**Soft gap:** the dashboard JSON is shipped for import. Live panels require Prometheus scrape of demo counters (process-local instrumentor today; wire to a `/metrics` exporter when deploying the control-plane metrics endpoint). Gateway latency panels reuse existing Envoy metrics as operational context only.
+- [`observability/grafana/token-factory-automated-demo.json`](../observability/grafana/token-factory-automated-demo.json) — **Token Factory Automated Demo** (`token_factory_demo_*`)
+- [`observability/grafana/token-factory-dashboard.json`](../observability/grafana/token-factory-dashboard.json) — gateway + SR scrape (`envoy_*`, `llm_*`)
+
+**Live demo panels:** keep the Streamlit UI running, open Grafana → *Token Factory Automated Demo*, run a pack from the Automated Demo tab. Panels refresh every ~10s once Prometheus shows job `token-factory-demo` UP.
+
+Gateway latency panels reuse existing Envoy metrics as operational context only.
 
 ## Failure injection
 

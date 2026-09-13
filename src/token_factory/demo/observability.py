@@ -31,7 +31,7 @@ class DemoInstrumentor:
     """Process-local instrumentation sink used by the demo runner.
 
     Prometheus-style counters use low-cardinality labels only:
-    scenario / use_case / compute_family / model / validation_status.
+    scenario / use_case / compute_family / model / validation_status / lifecycle.
     Request UUIDs are stored on spans/logs, never as counter labels.
     """
 
@@ -94,18 +94,40 @@ class DemoInstrumentor:
 
         span = self.start_span("token_factory.demo.request", **attrs)
 
+        self.record_counters(
+            scenario_id=scenario_id,
+            use_case=use_case,
+            compute_family=compute_family,
+            model=model,
+            validation_status=validation_status,
+            lifecycle=lifecycle,
+            fallback_used=fallback_used,
+        )
+        return span
+
+    def record_counters(
+        self,
+        *,
+        scenario_id: str,
+        use_case: str | None,
+        compute_family: str | None,
+        model: str | None,
+        validation_status: str,
+        lifecycle: str | None,
+        fallback_used: bool,
+    ) -> None:
+        """Increment low-cardinality Prometheus counters (no request UUID labels)."""
+        life = lifecycle or "unknown"
         labels = (
             ("scenario", scenario_id or "unknown"),
             ("use_case", (use_case or "unknown")[:64]),
             ("compute_family", compute_family or "unknown"),
             ("model", (model or "unknown")[:64]),
             ("validation_status", validation_status),
+            ("lifecycle", life),
         )
         self.inc("token_factory_demo_requests_total", labels)
-        self.inc(
-            "token_factory_demo_validation_total",
-            labels,
-        )
+        self.inc("token_factory_demo_validation_total", labels)
         if fallback_used:
             self.inc(
                 "token_factory_demo_fallback_total",
@@ -113,6 +135,7 @@ class DemoInstrumentor:
                     ("scenario", scenario_id or "unknown"),
                     ("use_case", (use_case or "unknown")[:64]),
                     ("compute_family", compute_family or "unknown"),
+                    ("lifecycle", life),
                 ),
             )
         self.inc(
@@ -121,13 +144,14 @@ class DemoInstrumentor:
                 ("scenario", scenario_id or "unknown"),
                 ("compute_family", compute_family or "unknown"),
                 ("model", (model or "unknown")[:64]),
+                ("lifecycle", life),
             ),
         )
-        return span
 
     def inc(self, name: str, labels: tuple[tuple[str, str], ...], value: int = 1) -> None:
         with self._lock:
             self.counters[name][labels] += value
+        self._flush_prometheus_file()
 
     def get_counter(self, name: str) -> dict[tuple[tuple[str, str], ...], int]:
         with self._lock:
@@ -143,6 +167,17 @@ class DemoInstrumentor:
                     label_str = ",".join(f'{k}="{v}"' for k, v in labels)
                     lines.append(f"{metric}{{{label_str}}} {value}")
         return "\n".join(lines) + ("\n" if lines else "")
+
+    def _flush_prometheus_file(self) -> None:
+        """Persist exposition text for the long-lived host scrape server."""
+        try:
+            from token_factory.demo.metrics_server import metrics_file_path
+
+            path = metrics_file_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(self.prometheus_text(), encoding="utf-8")
+        except OSError:
+            pass
 
     def has_expected_attributes(self, request_id: str) -> bool:
         required = {
@@ -165,6 +200,7 @@ class DemoInstrumentor:
             self.spans.clear()
             self.counters.clear()
             self.last_attributes = {}
+        self._flush_prometheus_file()
 
 
 # Process-wide default instrumentor (tests may replace / reset)

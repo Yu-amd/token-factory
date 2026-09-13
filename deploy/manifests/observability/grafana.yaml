@@ -9,6 +9,7 @@ data:
     datasources:
       - name: Prometheus
         type: prometheus
+        uid: prometheus
         access: proxy
         url: http://prometheus.observability.svc.cluster.local:9090
         isDefault: true

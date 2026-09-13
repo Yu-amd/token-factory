@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import textwrap
 import time
 from pathlib import Path
@@ -38,6 +39,18 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+# Expose Automated Demo Prometheus counters when a Streamlit session runs.
+# A long-lived file-backed server is also started by `make ui` on :9108.
+try:
+    _src = str(ROOT / "src")
+    if _src not in sys.path:
+        sys.path.insert(0, _src)
+    from token_factory.demo.metrics_server import start_metrics_server
+
+    start_metrics_server()
+except Exception:  # noqa: BLE001 — UI must boot even if metrics port is busy
+    pass
 
 CSS = textwrap.dedent(
     """

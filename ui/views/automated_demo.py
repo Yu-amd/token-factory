@@ -21,7 +21,10 @@ def render_automated_demo_tab(
     section: Callable[..., None],
 ) -> None:
     from token_factory.demo import DemoRunner, list_packs
+    from token_factory.demo.metrics_server import start_metrics_server
     from token_factory.demo.persist import list_recent_runs
+
+    start_metrics_server()
 
     section(
         "Automated Demo",
@@ -312,9 +315,11 @@ def _render_history_and_links(
             font-size:0.72rem;">Observability</p>
           <h3 style="margin:0.35rem 0 0.75rem;color:#e8e8e8;font-size:1.05rem;">Sibling consoles</h3>
           <p style="color:#999;font-size:0.85rem;margin:0 0 0.75rem;">
-            Import <span style="font-family:IBM Plex Mono,monospace;color:#8fd400;">
-            observability/grafana/token-factory-automated-demo.json</span>
-            for the Automated Demo dashboard (definition shipped; live scrape needs Prometheus).
+            Grafana dashboard <span style="font-family:IBM Plex Mono,monospace;color:#8fd400;">
+            Token Factory Automated Demo</span> plots
+            <span style="font-family:IBM Plex Mono,monospace;color:#8fd400;">token_factory_demo_*</span>
+            from this UI’s <span style="font-family:IBM Plex Mono,monospace;color:#8fd400;">:9108/metrics</span>
+            scrape (keep the UI running while demos execute).
           </p>
           <div class="tf-links">
             <a class="tf-link" href="{graf}" target="_blank" rel="noopener">Open Grafana →</a>

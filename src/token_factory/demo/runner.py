@@ -398,23 +398,12 @@ class DemoRunner:
             }
             actual["telemetry"] = tel_attrs
 
-            span = self.instrumentor.emit_request(
-                demo_run_id=run.id,
-                scenario_id=req.scenario_id,
-                request_id=req.request_id,
-                use_case=use_case,
-                policy=str(run.meta.get("policy_version")),
-                serving_pattern=serving,
-                lifecycle=life,
-                model=model_id,
-                compute=compute_id,
-                compute_family=family,
-                endpoint=endpoint_id,
-                fallback_used=fallback_used,
-                validation_status="pending",
-                duration_ms=duration_ms,
-                classify_ms=float(classify_ms) if classify_ms is not None else None,
-            )
+            # Span first (telemetry attribute check), counters after validation status is known.
+            span = self.instrumentor.start_span("token_factory.demo.request", **tel_attrs)
+            if duration_ms is not None:
+                span.set("duration_ms", duration_ms)
+            if classify_ms is not None:
+                span.set("classify_ms", float(classify_ms))
             telemetry_ok = self.instrumentor.has_expected_attributes(req.request_id)
 
             observability_pack = pack.get("id") == "observability" or bool(
@@ -429,14 +418,21 @@ class DemoRunner:
             )
             req.actual = actual
             req.validation = validation
+            overall = req.overall().value
+            self.instrumentor.record_counters(
+                scenario_id=req.scenario_id,
+                use_case=use_case,
+                compute_family=family,
+                model=model_id,
+                validation_status=overall,
+                lifecycle=life,
+                fallback_used=fallback_used,
+            )
             req.telemetry = {
                 **tel_attrs,
                 "duration_ms": round(duration_ms, 2),
                 "span_attributes": span.attributes,
             }
-            # Update counter status label via a second emit would inflate counts;
-            # store overall on actual instead.
-            overall = req.overall().value
             req.actual["validation_overall"] = overall
             req.status = "completed"
             req.completed_at = utc_now()

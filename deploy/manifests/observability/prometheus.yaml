@@ -87,6 +87,17 @@ data:
           - source_labels: [__meta_kubernetes_pod_name]
             action: replace
             target_label: instance
+
+      # Automated Demo counters from host UI/CLI (TF_DEMO_METRICS_PORT, default 9108).
+      # Kind-on-Linux pods reach the host via the kind bridge gateway (often 172.19.0.1).
+      # Override targets if your bridge IP differs: docker network inspect kind
+      - job_name: token-factory-demo
+        metrics_path: /metrics
+        scrape_interval: 10s
+        static_configs:
+          - targets: ['172.19.0.1:9108']
+            labels:
+              scrape_source: host-ui
 ---
 apiVersion: apps/v1
 kind: Deployment

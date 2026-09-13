@@ -9,6 +9,7 @@ step "Install observability stack"
 kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
 kubectl create configmap grafana-dashboard-token-factory \
   --from-file=token-factory.json="${REPO_ROOT}/observability/grafana/token-factory-dashboard.json" \
+  --from-file=token-factory-automated-demo.json="${REPO_ROOT}/observability/grafana/token-factory-automated-demo.json" \
   -n observability \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f "${REPO_ROOT}/deploy/manifests/observability/prometheus.yaml"

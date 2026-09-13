@@ -239,6 +239,52 @@ def test_observability_metadata_to_instrumentor():
     text = instr.prometheus_text()
     assert "token_factory_demo_requests_total" in text
     assert "req-1" not in text  # no request UUID labels
+    assert 'lifecycle="production"' in text
+
+
+def test_metrics_server_exposes_prometheus_text(tmp_path, monkeypatch):
+    from token_factory.demo.metrics_server import (
+        start_metrics_server,
+        stop_metrics_server,
+        metrics_endpoint_url,
+    )
+    import urllib.request
+
+    monkeypatch.setenv("TF_GENERATED_DIR", str(tmp_path))
+    stop_metrics_server()
+    listen = start_metrics_server(port=19108)
+    assert listen is not None
+    instr = DemoInstrumentor()
+    from token_factory.demo import observability as obs
+
+    prev = obs.INSTRUMENTOR
+    obs.INSTRUMENTOR = instr
+    try:
+        instr.emit_request(
+            demo_run_id="run-1",
+            scenario_id="interactive-coding",
+            request_id="req-metrics",
+            use_case="coding-assistant",
+            policy="2.3",
+            serving_pattern="interactive",
+            lifecycle="production",
+            model="openai/gpt-oss-120b",
+            compute="MI300X",
+            compute_family="instinct",
+            endpoint="gpt-oss-120b-coding",
+            fallback_used=False,
+            validation_status="PASS",
+        )
+        with urllib.request.urlopen(metrics_endpoint_url(port=19108), timeout=2) as resp:
+            body = resp.read().decode()
+        assert "token_factory_demo_requests_total" in body
+        assert "req-metrics" not in body
+        snap = tmp_path / "demo-metrics.prom"
+        assert snap.is_file()
+        assert "token_factory_demo_requests_total" in snap.read_text()
+    finally:
+        obs.INSTRUMENTOR = prev
+        stop_metrics_server()
 
 
 def test_smoke_run_mocked(tmp_path, monkeypatch):

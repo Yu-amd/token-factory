@@ -994,6 +994,14 @@ def demo_run_cmd(
 ) -> None:
     """Run Automated Demo scenario pack (routing-policy + observability validation)."""
     from token_factory.demo import DemoRunner
+    from token_factory.demo.metrics_server import metrics_endpoint_url, start_metrics_server
+
+    # Prefer long-lived make-ui metrics server; start one if missing (CLI-only runs).
+    metrics_listen = start_metrics_server()
+    if metrics_listen and not ci:
+        console.print(
+            f"[dim]Demo metrics: {metrics_endpoint_url(port=metrics_listen[1])}[/dim]"
+        )
 
     if mock and live:
         console.print("[red]Choose at most one of --mock / --live[/red]")

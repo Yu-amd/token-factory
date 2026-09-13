@@ -3,10 +3,10 @@
   "uid": "token-factory-automated-demo",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
-  "refresh": "30s",
+  "version": 2,
+  "refresh": "10s",
   "tags": ["token-factory", "automated-demo", "routing-policy", "observability"],
-  "description": "Routing-policy and observability validation for Automated Demo traffic. Latency/TTFT panels are operational telemetry only — not comparative hardware performance claims.",
+  "description": "Routing-policy and observability validation for Automated Demo traffic. Panels use token_factory_demo_* counters scraped from the host UI/CLI metrics port (:9108). Latency/TTFT panels are operational Envoy telemetry only — not comparative hardware claims.",
   "templating": {
     "list": [
       {
@@ -38,6 +38,16 @@
         "includeAll": true,
         "multi": true,
         "current": {"text": "All", "value": "$__all"}
+      },
+      {
+        "name": "lifecycle",
+        "type": "query",
+        "label": "Lifecycle",
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "query": "label_values(token_factory_demo_requests_total, lifecycle)",
+        "includeAll": true,
+        "multi": true,
+        "current": {"text": "All", "value": "$__all"}
       }
     ]
   },
@@ -45,12 +55,13 @@
     {
       "id": 1,
       "title": "Demo requests by use case",
-      "description": "Coverage of classified use cases — not a performance ranking.",
+      "description": "token_factory_demo_requests_total by use_case — coverage of classified use cases, not a performance ranking. Requires scrape job token-factory-demo → host :9108/metrics.",
       "type": "timeseries",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum by (use_case) (rate(token_factory_demo_requests_total{scenario=~\"$scenario\",use_case=~\"$use_case\",compute_family=~\"$compute_family\"}[5m]))",
+          "expr": "sum by (use_case) (rate(token_factory_demo_requests_total{scenario=~\"$scenario\",use_case=~\"$use_case\",compute_family=~\"$compute_family\",lifecycle=~\"$lifecycle\"}[5m]))",
           "legendFormat": "{{use_case}}"
         }
       ]
@@ -58,12 +69,13 @@
     {
       "id": 2,
       "title": "Demo requests by model",
-      "description": "Selected model distribution for policy validation coverage.",
+      "description": "token_factory_demo_route_total by model — selected model distribution for policy validation coverage.",
       "type": "timeseries",
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum by (model) (rate(token_factory_demo_route_total{scenario=~\"$scenario\",compute_family=~\"$compute_family\"}[5m]))",
+          "expr": "sum by (model) (rate(token_factory_demo_route_total{scenario=~\"$scenario\",compute_family=~\"$compute_family\",lifecycle=~\"$lifecycle\"}[5m]))",
           "legendFormat": "{{model}}"
         }
       ]
@@ -71,25 +83,27 @@
     {
       "id": 3,
       "title": "Requests by compute family",
-      "description": "Instinct / EPYC / Radeon routing coverage — not a hardware shootout.",
+      "description": "token_factory_demo_requests_total by compute_family — Instinct / EPYC / Radeon routing coverage, not a hardware shootout.",
       "type": "piechart",
       "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum by (compute_family) (token_factory_demo_requests_total{scenario=~\"$scenario\",use_case=~\"$use_case\"})",
+          "expr": "sum by (compute_family) (token_factory_demo_requests_total{scenario=~\"$scenario\",use_case=~\"$use_case\",lifecycle=~\"$lifecycle\"})",
           "legendFormat": "{{compute_family}}"
         }
       ]
     },
     {
       "id": 4,
-      "title": "Validation status",
-      "description": "PASS / WARN / FAIL counts from Automated Demo policy validation.",
+      "title": "Validation pass / fail",
+      "description": "token_factory_demo_validation_total by validation_status (PASS / WARN / FAIL / N/A).",
       "type": "timeseries",
       "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum by (validation_status) (rate(token_factory_demo_validation_total{scenario=~\"$scenario\"}[5m]))",
+          "expr": "sum by (validation_status) (rate(token_factory_demo_validation_total{scenario=~\"$scenario\",lifecycle=~\"$lifecycle\"}[5m]))",
           "legendFormat": "{{validation_status}}"
         }
       ]
@@ -97,22 +111,52 @@
     {
       "id": 5,
       "title": "Fallback count",
-      "description": "Preferred-endpoint unavailable / next eligible candidate selections.",
+      "description": "token_factory_demo_fallback_total — preferred-endpoint unavailable / next eligible candidate selections.",
       "type": "stat",
       "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(increase(token_factory_demo_fallback_total{scenario=~\"$scenario\"}[1h]))",
+          "expr": "sum(increase(token_factory_demo_fallback_total{scenario=~\"$scenario\",lifecycle=~\"$lifecycle\"}[1h]))",
           "legendFormat": "fallbacks"
         }
       ]
     },
     {
       "id": 6,
-      "title": "Gateway request rate (context)",
-      "description": "Operational Envoy traffic context while demos run.",
+      "title": "Requests by lifecycle",
+      "description": "token_factory_demo_requests_total by lifecycle (production / production-preview / evaluation / all).",
       "type": "timeseries",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum by (lifecycle) (rate(token_factory_demo_requests_total{scenario=~\"$scenario\",use_case=~\"$use_case\",compute_family=~\"$compute_family\",lifecycle=~\"$lifecycle\"}[5m]))",
+          "legendFormat": "{{lifecycle}}"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Demo request totals (cumulative)",
+      "description": "Cumulative token_factory_demo_requests_total since process start (UI/CLI instrumentor). Resets when the metrics process restarts.",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(token_factory_demo_requests_total{scenario=~\"$scenario\",use_case=~\"$use_case\",compute_family=~\"$compute_family\",lifecycle=~\"$lifecycle\"})",
+          "legendFormat": "requests"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Gateway request rate (context)",
+      "description": "Operational Envoy traffic context while demos run (separate scrape job).",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
           "expr": "sum(rate(envoy_http_downstream_rq_total[5m]))",
@@ -121,11 +165,12 @@
       ]
     },
     {
-      "id": 7,
+      "id": 9,
       "title": "Upstream latency p95 (telemetry only)",
       "description": "Operational TTFT/latency telemetry — do not use for comparative hardware claims.",
       "type": "timeseries",
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(envoy_cluster_upstream_rq_time_bucket[5m])) by (le))",
@@ -134,10 +179,12 @@
       ]
     },
     {
-      "id": 8,
+      "id": 10,
       "title": "Route failures / 5xx (context)",
+      "description": "Envoy 5xx class rate while demos run.",
       "type": "timeseries",
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
           "expr": "sum(rate(envoy_http_downstream_rq_xx{envoy_response_code_class=\"5\"}[5m]))",

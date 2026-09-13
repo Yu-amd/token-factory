@@ -65,13 +65,22 @@ ports:
 	$(PY) -m token_factory.cli.main ports start
 
 ui:
+	@mkdir -p generated
+	@if curl -sf http://127.0.0.1:9108/metrics >/dev/null 2>&1; then \
+		echo "Demo metrics already on :9108"; \
+	else \
+		echo "Starting demo metrics on :9108"; \
+		$(PY) -m token_factory.demo.metrics_server --port 9108 >>generated/demo-metrics-server.log 2>&1 & \
+		echo $$! > generated/demo-metrics-server.pid; \
+		sleep 0.4; \
+	fi
 	@if curl -sf http://127.0.0.1:8501/_stcore/health >/dev/null 2>&1; then \
 		echo "Token Factory UI already running at http://localhost:8501"; \
 	elif ss -tlnH 2>/dev/null | grep -qE ':8501\b' || ss -tln 2>/dev/null | grep -q ':8501'; then \
 		echo "Port 8501 is busy (not a healthy Streamlit). Free it, then re-run make ui."; \
 		exit 1; \
 	else \
-		cd ui && $(PY) -m streamlit run app.py; \
+		cd ui && PYTHONPATH=$(REPO_ROOT)/src $(PY) -m streamlit run app.py; \
 	fi
 
 smoke-ui:
