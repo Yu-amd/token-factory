@@ -466,7 +466,61 @@ def section(
     )
 
 
+def stream_chat_completion(
+    prompt: str,
+    model: str,
+    meta: dict[str, Any],
+):
+    """Yield SSE text deltas from the gateway; update meta with model/finish."""
+    with httpx.stream(
+        "POST",
+        f"{GATEWAY}/v1/chat/completions",
+        headers={"Authorization": "Bearer demo-key"},
+        json={
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 512,
+            "stream": True,
+        },
+        timeout=120.0,
+    ) as response:
+        if response.status_code >= 400:
+            body = response.read().decode("utf-8", errors="replace")[:500]
+            raise RuntimeError(f"HTTP {response.status_code}: {body}")
+
+        for line in response.iter_lines():
+            if not line:
+                continue
+            if line.startswith("data:"):
+                payload = line[5:].strip()
+            elif line.startswith("{"):
+                payload = line.strip()
+            else:
+                continue
+            if payload == "[DONE]":
+                break
+            try:
+                chunk = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+            if chunk.get("model"):
+                meta["model"] = chunk["model"]
+            choice = (chunk.get("choices") or [{}])[0]
+            if choice.get("finish_reason"):
+                meta["finish"] = choice["finish_reason"]
+            delta = choice.get("delta") or {}
+            # Prefer visible content; fall back to reasoning so gpt-oss streams live.
+            text = delta.get("content") or delta.get("reasoning") or ""
+            if text:
+                if delta.get("content"):
+                    meta["saw_content"] = True
+                elif delta.get("reasoning"):
+                    meta["saw_reasoning"] = True
+                yield text
+
+
 def chat_completion(prompt: str, model: str) -> dict[str, Any]:
+    """Non-streaming fallback."""
     r = httpx.post(
         f"{GATEWAY}/v1/chat/completions",
         headers={"Authorization": "Bearer demo-key"},
@@ -517,8 +571,8 @@ with tab_chat:
     section(
         "Playground",
         "Chat through the gateway",
-        "Send a prompt to the virtual model. Envoy AI Gateway hands it to Semantic Router, "
-        "which classifies the domain and selects an AIM backend on Instinct / EPYC / Radeon.",
+        "Send a prompt to the virtual model. Replies stream live through Envoy AI Gateway → "
+        "Semantic Router → AIM backends on Instinct / EPYC / Radeon.",
         hero=True,
         meta=[
             ("Virtual model", VIRTUAL_MODEL),
@@ -538,27 +592,46 @@ with tab_chat:
         with st.chat_message("user"):
             st.markdown(prompt)
         with st.chat_message("assistant"):
-            with st.spinner("Routing…"):
-                try:
+            stream_meta: dict[str, Any] = {
+                "model": None,
+                "finish": None,
+                "saw_content": False,
+                "saw_reasoning": False,
+            }
+            try:
+                reply = st.write_stream(
+                    stream_chat_completion(prompt, VIRTUAL_MODEL, stream_meta)
+                )
+                if not (reply or "").strip():
+                    # Rare empty stream — fall back once without streaming.
                     body = chat_completion(prompt, VIRTUAL_MODEL)
                     reply = extract_reply(body)
-                    meta_line = (
-                        f"routed model={body.get('model')} · "
-                        f"finish={(body.get('choices') or [{}])[0].get('finish_reason')}"
+                    stream_meta["model"] = body.get("model")
+                    stream_meta["finish"] = (body.get("choices") or [{}])[0].get(
+                        "finish_reason"
                     )
                     st.markdown(reply)
-                    st.caption(meta_line)
-                    with st.expander("Raw response"):
-                        st.json(body)
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": reply, "meta": meta_line}
-                    )
-                except Exception as exc:
-                    err = f"{exc} — is the gateway up? Run: `token-factory ports start`"
-                    st.error(err)
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": err}
-                    )
+                kind = (
+                    "content"
+                    if stream_meta.get("saw_content")
+                    else "reasoning"
+                    if stream_meta.get("saw_reasoning")
+                    else "stream"
+                )
+                meta_line = (
+                    f"routed model={stream_meta.get('model') or '—'} · "
+                    f"finish={stream_meta.get('finish') or '—'} · {kind} · streaming"
+                )
+                st.caption(meta_line)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": reply, "meta": meta_line}
+                )
+            except Exception as exc:
+                err = f"{exc} — is the gateway up? Run: `token-factory ports start`"
+                st.error(err)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": err}
+                )
 
     if st.session_state.messages:
         if st.button("Clear chat", type="secondary"):
