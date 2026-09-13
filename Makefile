@@ -65,7 +65,14 @@ ports:
 	$(PY) -m token_factory.cli.main ports start
 
 ui:
-	cd ui && $(PY) -m streamlit run app.py
+	@if curl -sf http://127.0.0.1:8501/_stcore/health >/dev/null 2>&1; then \
+		echo "Token Factory UI already running at http://localhost:8501"; \
+	elif ss -tlnH 2>/dev/null | grep -qE ':8501\b' || ss -tln 2>/dev/null | grep -q ':8501'; then \
+		echo "Port 8501 is busy (not a healthy Streamlit). Free it, then re-run make ui."; \
+		exit 1; \
+	else \
+		cd ui && $(PY) -m streamlit run app.py; \
+	fi
 
 smoke-ui:
 	bash scripts/smoke-playground-stream.sh
