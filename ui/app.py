@@ -89,7 +89,7 @@ Client → Envoy AI Gateway → vLLM Semantic Router (extproc)
 
 with tab_inv:
     st.subheader("Endpoint inventory")
-    st.dataframe(meta.get("endpoints", []), use_container_width=True)
+    st.dataframe(meta.get("endpoints", []), width="stretch")
 
 with tab_pol:
     st.subheader("Active policy")
