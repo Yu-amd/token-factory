@@ -261,12 +261,13 @@ def test_observability_metadata_to_instrumentor():
 
 
 def test_metrics_server_exposes_prometheus_text(tmp_path, monkeypatch):
+    import urllib.request
+
     from token_factory.demo.metrics_server import (
+        metrics_endpoint_url,
         start_metrics_server,
         stop_metrics_server,
-        metrics_endpoint_url,
     )
-    import urllib.request
 
     monkeypatch.setenv("TF_GENERATED_DIR", str(tmp_path))
     stop_metrics_server()

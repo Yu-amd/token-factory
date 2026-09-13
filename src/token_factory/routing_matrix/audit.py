@@ -12,7 +12,6 @@ from token_factory.routing_matrix.portfolio import (
     vendor_of,
 )
 
-
 # Models observed on AMD docs models.html as of 2026-09-13 (manual reconcile; not scraped at runtime).
 # Soft gap list only — do not invent AIM support matrices from this set.
 AMD_DOCS_MODELS_SNAPSHOT_2026_09_13 = frozenset(
@@ -73,7 +72,6 @@ def audit_catalog(root: Any | None = None) -> dict[str, Any]:
     models_meta = {m["model"] for m in (bundle.get("models") or {}).get("models") or []}
     compute = [c["id"] for c in (bundle.get("compute") or {}).get("compute") or []]
 
-    tp_raw = []
     tp_path_models = []
     tp_meta = (bundle.get("aims") or {}).get("tech_preview_metadata") or {}
     # Count unique TP-source models from merge tags

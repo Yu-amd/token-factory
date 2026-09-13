@@ -10,7 +10,8 @@ UI_ROOT = Path(__file__).resolve().parents[2] / "ui"
 if str(UI_ROOT) not in sys.path:
     sys.path.insert(0, str(UI_ROOT))
 
-from components.request_state import (
+# UI components live under ui/ (not an installed package); path insert must precede import.
+from components.request_state import (  # noqa: E402
     apply_classify,
     apply_resolved_route,
     caption_line,

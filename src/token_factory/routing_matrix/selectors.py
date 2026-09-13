@@ -8,7 +8,7 @@ BEST BATCH / BEST LOCAL — optional context cards
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 from token_factory.catalog.eligibility import SUPPORT_RANK
 

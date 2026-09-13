@@ -159,8 +159,8 @@ def test_sparse_radeon_only_where_aim_exists():
 
 
 def test_policy_profiles_still_validate():
-    from token_factory.config import load_policies, load_endpoints, load_token_factory, validate_all
     from token_factory.catalog import load_catalog
+    from token_factory.config import load_endpoints, load_policies, load_token_factory, validate_all
 
     endpoints = load_endpoints(ROOT / "config" / "endpoints.example.yaml")
     catalog = load_catalog(ROOT / "catalog" / "aims.yaml")

@@ -17,7 +17,6 @@ from typing import Any
 from token_factory.catalog.eligibility import SUPPORT_RANK
 from token_factory.routing_matrix.evidence import (
     audit_evidence_gaps,
-    cap_is_false,
     cap_is_true,
     cap_is_unknown,
     cap_truth,
@@ -30,7 +29,6 @@ from token_factory.routing_matrix.evidence import (
     performance_evidence_status,
     quality_fit_from_strengths,
     recommendation_confidence,
-    records_for_model,
     review_status_for_model,
     strength_level,
 )
@@ -38,10 +36,8 @@ from token_factory.routing_matrix.loader import load_routing_bundle
 from token_factory.routing_matrix.portfolio import (
     EXECUTIVE_TOP_ROWS,
     capability_cell_from_aim,
-    catalog_counts as build_catalog_counts,
     catalog_model_ids,
     classify_row_status,
-    compute_counts as build_compute_counts,
     executive_display_rows,
     filter_columns,
     filter_display_rows,
@@ -49,6 +45,12 @@ from token_factory.routing_matrix.portfolio import (
     order_portfolio_rows,
     unsupported_cell,
     why_not_recommended,
+)
+from token_factory.routing_matrix.portfolio import (
+    catalog_counts as build_catalog_counts,
+)
+from token_factory.routing_matrix.portfolio import (
+    compute_counts as build_compute_counts,
 )
 
 LEVEL_ORDER = {
@@ -2057,11 +2059,9 @@ class RecommendationEngine:
         ca, cb = _pick(model_a), _pick(model_b)
         meta_a = self.models.get(model_a) or {}
         meta_b = self.models.get(model_b) or {}
-        use_case = self.use_cases[use_case_id]
 
         def _cap_row(meta: dict[str, Any], key: str) -> str:
             caps = meta.get("capabilities") or {}
-            from token_factory.routing_matrix.evidence import cap_truth
 
             t = cap_truth(caps.get(key))
             return {"true": "✓", "false": "✗", "unknown": "?"}.get(t, "?")

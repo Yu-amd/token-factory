@@ -626,7 +626,9 @@ def recommend(
             f"Objective  {result['objective']}\n"
             f"Serving    {result.get('serving_pattern')} · latency {result.get('latency_requirement')}\n"
             f"Lifecycle  {result.get('lifecycle_mode')} · allow {result.get('allowed_lifecycles')}\n"
-            f"Cost data  {result.get('cost_data', 'relative')} · evidence {result.get('cost_evidence_default', 'RELATIVE')} · policy {result.get('policy_version')}"
+            f"Cost data  {result.get('cost_data', 'relative')} · "
+            f"evidence {result.get('cost_evidence_default', 'RELATIVE')} · "
+            f"policy {result.get('policy_version')}"
         )
     )
     if result.get("locality_note"):

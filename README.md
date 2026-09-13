@@ -84,14 +84,19 @@ for evaluation; production defaults exclude them.
 Client (curl / Streamlit)
     │  model: token-factory/auto
     ▼
-Envoy AI Gateway (v0.4.0)     auth, rate limits, AIGatewayRoute
-    │  extproc gRPC
+Envoy AI Gateway
+    │
     ▼
-vLLM Semantic Router (0.3.0)  domain classify → LoRA / x-ai-eg-model
-    │         ├─ coding / math  → GPT-OSS 120B (Instinct)
-    │         └─ general        → GPT-OSS 20B (Instinct)
+vLLM Semantic Router
+    │  semantic workload classification
     ▼
-Prometheus / Grafana / SR Dashboard :8700
+AMD Canonical Routing Policy
+    │  workload → model × AMD compute
+    ▼
+Selected AIM endpoint
+    │  Instinct / EPYC / Radeon
+    ▼
+Prometheus / Grafana / SR Dashboard
 ```
 
 **Playground note:** AI Gateway buffers SSE until generation completes. The Streamlit
