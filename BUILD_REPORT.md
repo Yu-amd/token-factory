@@ -228,7 +228,7 @@ curl -s http://localhost:8080/v1/chat/completions \
 - Generated `generated/` gitignored — must run `compile` after config changes.
 - Streamlit UI runs locally only (not in-cluster).
 - Grafana SR intent metrics are Envoy placeholders; wire SR OTel in V2.
-- **AIGW SSE buffering** — `stream: true` through the gateway arrives as one burst (verified in-cluster); Playground paces display. Fix when AIGW ModeOverride to STREAMED works with dual SR extproc.
+- **AIGW SSE buffering** — `stream: true` through the gateway arrives as one burst (TTFT ≈ full generation). Playground uses SR classify → direct AIM stream for live TTFT; gateway live SSE remains a V2 fix.
 - `test_policy_profiles_validate` assumes example endpoints exist for all profiles.
 
 ---
