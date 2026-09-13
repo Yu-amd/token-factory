@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Bootstrap a local kind cluster for Token Factory.
 #
-# NOTE: Do NOT map hostPort 8080→80 — kubectl port-forward uses localhost:8080
-# for the AI Gateway. Use high ports (30080/30090) for optional host ingress only.
+# NOTE: Do NOT map hostPort 8080→80 — that clashes with legacy demos and can
+# steal IPv4 localhost:8080 from kubectl port-forward. Token Factory forwards
+# the AI Gateway to localhost:18080. Optional high ports (30080/30090) only.
 #
 # Usage: ./scripts/00-kind-cluster.sh [--name token-factory]
 set -euo pipefail

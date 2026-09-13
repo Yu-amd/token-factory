@@ -15,7 +15,9 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 META_PATH = ROOT / "generated" / "ui-metadata.json"
 GATEWAY = os.environ.get("TF_GATEWAY_URL", "http://127.0.0.1:18080")
-SR_API = os.environ.get("TF_SR_API_URL", "http://127.0.0.1:8081")
+SR_API = os.environ.get("TF_SR_API_URL") or os.environ.get(
+    "TF_SR_URL", "http://127.0.0.1:8081"
+)
 VIRTUAL_MODEL = os.environ.get("TF_VIRTUAL_MODEL", "token-factory/auto")
 # Generous default so architecture / coding prompts are not truncated mid-answer.
 MAX_TOKENS = int(os.environ.get("TF_MAX_TOKENS", "4096"))

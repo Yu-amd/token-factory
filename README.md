@@ -12,7 +12,7 @@ Repository: https://github.com/Yu-amd/token-factory
 - **Python CLI** (`token-factory`): preflight, compile, install, verify, ports, UI, route explain
 - **Policy profiles**: balanced, quality, cost-efficient, low-latency, edge-first, enterprise
 - **AIM catalog** from AMD Enterprise AI accelerator matrix
-- **Streamlit UI** with chat, routing, architecture, inventory, operations
+- **Streamlit UI** — Playground with **live TTFT** (SR classify → direct AIM stream), routing, architecture, inventory, operations
 - **Mock OpenAI backends** for kind/CI without GPU
 - **Clean port-forward manager** with PID tracking (no blind `pkill kubectl`)
 
@@ -26,11 +26,15 @@ Envoy AI Gateway (v0.4.0)     auth, rate limits, AIGatewayRoute
     │  extproc gRPC
     ▼
 vLLM Semantic Router (0.3.0)  domain classify → LoRA / x-ai-eg-model
-    │         ├─ coding-expert  → GPT-OSS 120B (Instinct)
-    │         └─ general-expert → GPT-OSS 20B (Instinct)
+    │         ├─ coding / math  → GPT-OSS 120B (Instinct)
+    │         └─ general        → GPT-OSS 20B (Instinct)
     ▼
 Prometheus / Grafana / SR Dashboard :8700
 ```
+
+**Playground note:** AI Gateway buffers SSE until generation completes. The Streamlit
+Playground classifies via SR API (`:8081`) then streams **directly from AIM** for
+live TTFT. See [docs/ui.md](docs/ui.md).
 
 See [docs/architecture.md](docs/architecture.md).
 
@@ -62,15 +66,16 @@ make compile
 make install                 # full modular install
 make verify
 make ports                   # 18080 gateway, 8081 SR API, 8700 dashboard, 3000/9090
-make ui                      # Streamlit on :8501
+make ui                      # Streamlit on :8501 (live AIM streaming)
+bash scripts/smoke-playground-stream.sh   # classify → AIM TTFT smoke
 ```
 
-### Test routing
+### Test routing (gateway path)
 
 ```bash
 curl -s http://127.0.0.1:18080/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"token-factory/auto","messages":[{"role":"user","content":"Write quicksort in Rust"}]}'
+  -H 'Content-Type: application/json' -H 'Authorization: Bearer demo-key' \
+  -d '{"model":"token-factory/auto","messages":[{"role":"user","content":"Write quicksort in Rust"}],"max_tokens":64}'
 ```
 
 ## Version matrix
@@ -118,7 +123,7 @@ docs/                   Architecture, deployment, ops guides
 
 ## Makefile targets
 
-`help`, `preflight`, `compile`, `install`, `apply`, `verify`, `test`, `demo`, `status`, `dashboard`, `grafana`, `ports`, `ui`, `logs`, `reset`, `uninstall`, `update-aim-catalog`, `lint`
+`help`, `preflight`, `compile`, `install`, `apply`, `verify`, `test`, `demo`, `status`, `dashboard`, `grafana`, `ports`, `ui`, `smoke-ui`, `logs`, `reset`, `uninstall`, `update-aim-catalog`, `lint`
 
 ## Example endpoints (reference)
 
@@ -154,6 +159,7 @@ CI (`.github/workflows/ci.yml`): ruff, pytest, compile, Helm template dashboard 
 - [BUILD_REPORT.md](BUILD_REPORT.md) — V1 verified status, routing tests, workarounds
 - [Configuration](docs/configuration.md)
 - [Deployment](docs/deployment.md)
+- [Streamlit UI / Playground](docs/ui.md)
 - [Semantic Router Dashboard](docs/semantic-router-dashboard.md)
 - [Routing policies](docs/routing-policy.md)
 - [AMD compute / AIMs](docs/amd-compute-guide.md)

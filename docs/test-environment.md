@@ -97,6 +97,7 @@ See `BUILD_REPORT.md` for WHY / UPSTREAM / WHEN REMOVABLE:
 3. `lora_name` = real model IDs (AIGW override + dual extproc)
 4. EnvoyProxy ClusterIP on kind
 5. Same-model-only priority failover (cross-model rewrite unreliable)
+6. Playground streams via SR classify → direct AIM (AIGW SSE buffering)
 
 ## Secrets
 

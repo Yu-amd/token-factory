@@ -1,4 +1,4 @@
-.PHONY: help preflight install apply verify test demo status dashboard grafana logs reset uninstall update-aim-catalog compile ports ui lint
+.PHONY: help preflight install apply verify test demo status dashboard grafana logs reset uninstall update-aim-catalog compile ports ui smoke-ui lint
 
 REPO_ROOT := $(shell pwd)
 VENV := $(REPO_ROOT)/.venv
@@ -15,8 +15,9 @@ help:
 	@echo "  demo                 Compile + run mock backend locally"
 	@echo "  status               CLI health checks"
 	@echo "  dashboard            Port-forward + verify SR dashboard"
-	@echo "  ports                Start tracked port-forwards"
-	@echo "  ui                   Launch Streamlit UI"
+	@echo "  ports                Start tracked port-forwards (:18080 gateway, :8081 SR API, …)"
+	@echo "  ui                   Launch Streamlit UI (Playground: classify→AIM live stream)"
+	@echo "  smoke-ui             Smoke-test Playground streaming path"
 	@echo "  logs                 Tail semantic-router logs"
 	@echo "  reset                Uninstall + delete generated/"
 	@echo "  uninstall            Uninstall Helm releases"
@@ -58,6 +59,9 @@ ports:
 
 ui:
 	cd ui && $(PY) -m streamlit run app.py
+
+smoke-ui:
+	bash scripts/smoke-playground-stream.sh
 
 logs:
 	kubectl logs -n vllm-semantic-router-system deploy/semantic-router -f --tail=100

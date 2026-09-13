@@ -17,7 +17,7 @@
 - Semantic Router **dashboard** enabled and reachable at http://localhost:8700 (`token-factory dashboard` → HTTP 200)
 - Grafana (:3000) and Prometheus (:9090) healthy via port-forward
 - Python CLI, Makefile, unit tests (10 passed), CI workflow
-- Three operational views: Token Factory UI (`make ui`), SR dashboard (:8700), Grafana (:3000)
+- Three operational views: Token Factory UI (`make ui`, live AIM streaming), SR dashboard (:8700), Grafana (:3000)
 
 ---
 
@@ -194,9 +194,17 @@ make verify
 Gateway API test:
 
 ```bash
-curl -s http://localhost:8080/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"token-factory/auto","messages":[{"role":"user","content":"Hello"}]}'
+curl -s http://127.0.0.1:18080/v1/chat/completions \
+  -H 'Content-Type: application/json' -H 'Authorization: Bearer demo-key' \
+  -d '{"model":"token-factory/auto","messages":[{"role":"user","content":"Hello"}],"max_tokens":64}'
+```
+
+Playground live-stream smoke:
+
+```bash
+make ports
+bash scripts/smoke-playground-stream.sh
+make ui   # http://localhost:8501 — caption should show live AIM
 ```
 
 ---
@@ -226,7 +234,7 @@ curl -s http://localhost:8080/v1/chat/completions \
 
 - Policy profiles in `policies/amd-*` should stay synced with `config/policies.yaml` lora naming convention.
 - Generated `generated/` gitignored — must run `compile` after config changes.
-- Streamlit UI runs locally only (not in-cluster).
+- Streamlit UI runs locally only (not in-cluster); Playground uses classify→AIM for live TTFT (see `docs/ui.md`).
 - Grafana SR intent metrics are Envoy placeholders; wire SR OTel in V2.
 - **AIGW SSE buffering** — `stream: true` through the gateway arrives as one burst (TTFT ≈ full generation). Playground uses SR classify → direct AIM stream for live TTFT; gateway live SSE remains a V2 fix.
 - `test_policy_profiles_validate` assumes example endpoints exist for all profiles.

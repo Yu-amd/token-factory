@@ -31,13 +31,17 @@ bash scripts/install-observability.sh
 bash scripts/00-kind-cluster.sh --name token-factory
 ```
 
-**Important:** The kind config does **not** map hostPort 8080 (reserved for `kubectl port-forward` to the AI Gateway). Optional high ports 30080/30090 only.
+**Important:** The kind config does **not** map hostPort 8080 (avoids clashing with
+legacy demos / accidental binds). Token Factory port-forwards the AI Gateway to
+**localhost:18080**.
 
 After install:
 
 ```bash
-make ports    # tracked port-forwards (8080, 8081, 8700, 3000, 9090)
+make ports    # 18080 gateway, 8081 SR API, 8700 dashboard, 3000 Grafana, 9090 Prometheus
 make verify
+make ui       # Streamlit Playground (live AIM streaming) on :8501
+bash scripts/smoke-playground-stream.sh
 ```
 
 ## Mock backends (no GPU)

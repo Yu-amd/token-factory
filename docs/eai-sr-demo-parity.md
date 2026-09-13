@@ -33,6 +33,7 @@ Reference demo: `/tmp/eai-sr-demo` (functional lessons only; **not** copied stru
 - SR dashboard HTTP 200 via `token-factory dashboard`
 - gateway-crds server-side apply workaround documented
 - SR Service selector patch for chart 0.3.0 dashboard collision
+- Playground live TTFT via SR classify → direct AIM stream (`docs/ui.md`)
 
 ## Not ported
 
