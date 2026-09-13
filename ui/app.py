@@ -1294,10 +1294,20 @@ with tab_matrix:
                     )
                 with ex2:
                     export_style = st.selectbox(
-                        "Style",
-                        ["Slide (16:9)", "Full Matrix"],
+                        "Layout",
+                        ["Executive Slide", "Full Matrix"],
                         key="matrix_export_style",
+                        help="Executive Slide = 16:9 preferred route + top-5 alternatives. "
+                        "Full Matrix = exact projected grid.",
                     )
+                    export_top_n = 5
+                    if export_style.startswith("Executive"):
+                        export_top_n = st.selectbox(
+                            "Top N",
+                            [3, 5, 10],
+                            index=1,
+                            key="matrix_export_top_n",
+                        )
                 with ex3:
                     export_format = st.selectbox(
                         "Format",
@@ -1308,7 +1318,9 @@ with tab_matrix:
                     st.caption("All Use Cases + PNG downloads as a ZIP of per-use-case PNGs.")
                 if st.button("Generate export", key="matrix_export_btn"):
                     try:
-                        style_key = "slide" if export_style.startswith("Slide") else "full"
+                        style_key = (
+                            "executive" if export_style.startswith("Executive") else "full"
+                        )
                         fmt_key = {"PNG": "png", "CSV": "csv", "ZIP Bundle": "zip"}[export_format]
                         scope_key = "current" if export_scope == "Current View" else "all"
                         result = resolve_export(
@@ -1317,6 +1329,7 @@ with tab_matrix:
                             scope=scope_key,
                             format=fmt_key,  # type: ignore[arg-type]
                             style=style_key,  # type: ignore[arg-type]
+                            top_n=int(export_top_n) if style_key == "executive" else 5,
                             matrix_kwargs={
                                 "objective": obj_opts[obj_label],
                                 "deployment": dep_opts[dep_label],

@@ -3,6 +3,11 @@
 Consumes the same projection the Matrix UI shows via
 ``get_current_matrix_projection``. Does not change ranking, status, confidence,
 or evidence — rendering/export only.
+
+Styles:
+- **executive** (Executive Slide) — 1920×1080 preferred-route + top-N table
+- **full** — full projected grid canvas
+- **slide** — accepted as an alias of **executive** (legacy)
 """
 
 from __future__ import annotations
@@ -15,6 +20,13 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Iterable, Literal
 
+from token_factory.routing_matrix.executive import (
+    ANTI_BENCHMARK,
+    DEFAULT_TOP_N,
+    build_executive_slide,
+    executive_csv_bytes,
+    render_executive_png,
+)
 from token_factory.routing_matrix.projection import (
     MatrixProjection,
     cell_mark_text,
@@ -23,10 +35,9 @@ from token_factory.routing_matrix.projection import (
 )
 
 FormatName = Literal["png", "csv", "zip", "svg"]
-StyleName = Literal["slide", "full"]
+StyleName = Literal["executive", "full", "slide"]
 ScopeName = Literal["current", "all"]
 
-ANTI_BENCHMARK = "Routing policy output — not a benchmark"
 CSV_FIELDS = (
     "use_case",
     "model",
@@ -61,6 +72,16 @@ class ExportResult:
     note: str | None = None
 
 
+def normalize_style(style: str) -> StyleName:
+    """Map UI/CLI style names; ``slide`` → ``executive``."""
+    key = (style or "executive").strip().lower()
+    if key in ("slide", "executive", "executive-slide", "executive_slide"):
+        return "executive"
+    if key == "full":
+        return "full"
+    raise ValueError(f"Unsupported style: {style}")
+
+
 def _sanitize_token(value: str | None, *, fallback: str = "na") -> str:
     text = (value or fallback).strip().lower()
     text = re.sub(r"[^a-z0-9]+", "-", text)
@@ -81,12 +102,13 @@ def export_filename(
     """Deterministic ``token-factory-routing-...`` sanitized name."""
     ts = timestamp or datetime.now(timezone.utc)
     stamp = ts.strftime("%Y%m%dT%H%M%SZ")
+    style_token = normalize_style(style) if style else "executive"
     parts = [
         "token-factory-routing",
         "all-use-cases" if scope == "all" else _sanitize_token(use_case, fallback="matrix"),
         _sanitize_token(lifecycle, fallback="lifecycle"),
         _sanitize_token(view, fallback="view"),
-        _sanitize_token(style, fallback="slide"),
+        _sanitize_token(style_token, fallback="executive"),
         stamp,
     ]
     return "-".join(parts) + f".{fmt}"
@@ -197,37 +219,30 @@ def _try_load_font(size: int):
     return ImageFont.load_default()
 
 
-def render_matrix_png(
+def render_full_matrix_png(
     projection: MatrixProjection,
     *,
-    style: StyleName = "slide",
     timestamp: datetime | None = None,
 ) -> bytes:
-    """Deterministic PNG via Pillow (Slide 16:9 or Full Matrix canvas)."""
+    """Full Matrix canvas sized to the projected grid."""
     from PIL import Image, ImageDraw
 
     ts = timestamp or _utc_now()
-    title, subtitle = _title_lines(projection, style)
+    title, subtitle = _title_lines(projection, "full")
     footer = _footer_text(projection, ts)
     legend = _legend_text()
 
     n_rows = max(len(projection.rows), 1)
     n_cols = max(len(projection.columns), 1)
 
-    if style == "slide":
-        width, height = 1920, 1080
-        pad = 36
-        title_size, sub_size, cell_size, footer_size = 28, 16, 13, 13
-    else:
-        # Full matrix: size to content with readable cells
-        model_w = 220
-        col_w = max(72, min(120, 1400 // max(n_cols, 1)))
-        row_h = 28
-        header_block = 160
-        pad = 28
-        width = min(4800, max(1280, model_w + n_cols * col_w + 2 * pad))
-        height = min(8000, max(720, header_block + n_rows * row_h + 80))
-        title_size, sub_size, cell_size, footer_size = 26, 15, 12, 12
+    model_w = 220
+    col_w = max(72, min(120, 1400 // max(n_cols, 1)))
+    row_h = 28
+    header_block = 160
+    pad = 28
+    width = min(4800, max(1280, model_w + n_cols * col_w + 2 * pad))
+    height = min(8000, max(720, header_block + n_rows * row_h + 80))
+    title_size, sub_size, cell_size, footer_size = 26, 15, 12, 12
 
     img = Image.new("RGB", (width, height), "#0f0f0f")
     draw = ImageDraw.Draw(img)
@@ -251,14 +266,12 @@ def render_matrix_png(
     table_h = max(table_bottom - table_top, 40)
     table_w = max(table_right - table_left, 40)
 
-    model_col_w = int(table_w * 0.22) if style == "slide" else min(260, int(table_w * 0.2))
-    col_w = (table_w - model_col_w) / n_cols
-    # header + body
+    model_col_w = min(260, int(table_w * 0.2))
+    col_w_f = (table_w - model_col_w) / n_cols
     header_h = max(28, int(table_h * 0.08))
     body_h = table_h - header_h
-    row_h = body_h / n_rows
+    row_h_f = body_h / n_rows
 
-    # Header background
     draw.rectangle(
         [table_left, table_top, table_right, table_top + header_h],
         fill="#1a1a1a",
@@ -271,7 +284,7 @@ def render_matrix_png(
         font=font_cell,
     )
     for i, col in enumerate(projection.columns):
-        x = table_left + model_col_w + i * col_w
+        x = table_left + model_col_w + i * col_w_f
         label = col if len(col) <= 10 else col[:9] + "…"
         draw.text(
             (x + 4, table_top + (header_h - cell_size) / 2),
@@ -292,14 +305,14 @@ def render_matrix_png(
     }
 
     for r_i, model in enumerate(projection.rows):
-        y0 = table_top + header_h + r_i * row_h
-        y1 = y0 + row_h
+        y0 = table_top + header_h + r_i * row_h_f
+        y1 = y0 + row_h_f
         bg = "#141414" if r_i % 2 == 0 else "#121212"
         draw.rectangle([table_left, y0, table_right, y1], fill=bg, outline="#2a2a2a")
         status = projection.row_status.get(model, "")
         short = model if len(model) < 34 else model[:31] + "…"
         draw.text((table_left + 6, y0 + 2), short, fill="#e8e8e8", font=font_cell)
-        if row_h >= cell_size * 2 + 4:
+        if row_h_f >= cell_size * 2 + 4:
             draw.text(
                 (table_left + 6, y0 + 2 + cell_size + 1),
                 status,
@@ -311,13 +324,18 @@ def render_matrix_png(
             mark = cell_mark_text(cell)
             live = "●" if cell and cell.get("endpoint_available") else ""
             text = f"{mark}{live}"
-            x = table_left + model_col_w + c_i * col_w
+            x = table_left + model_col_w + c_i * col_w_f
             color = "#8fd400" if mark == "★" else "#dafd95" if mark in "①②③④⑤" else "#cccccc"
             if mark in ("—", "⊘"):
                 color = "#555555"
             elif mark in ("◌", "○"):
                 color = "#888888"
-            draw.text((x + col_w / 2 - 4, y0 + max(2, (row_h - cell_size) / 2)), text, fill=color, font=font_cell)
+            draw.text(
+                (x + col_w_f / 2 - 4, y0 + max(2, (row_h_f - cell_size) / 2)),
+                text,
+                fill=color,
+                font=font_cell,
+            )
 
     draw.text((pad, height - pad - footer_size), footer, fill="#888888", font=font_footer)
 
@@ -326,18 +344,44 @@ def render_matrix_png(
     return out.getvalue()
 
 
+def render_matrix_png(
+    projection: MatrixProjection,
+    *,
+    style: StyleName | str = "executive",
+    timestamp: datetime | None = None,
+    top_n: int = DEFAULT_TOP_N,
+    inventory_provided: bool | None = None,
+) -> bytes:
+    """PNG via Pillow — Executive Slide (16:9) or Full Matrix canvas."""
+    style_key = normalize_style(style)
+    ts = timestamp or _utc_now()
+    if style_key == "executive":
+        model = build_executive_slide(
+            projection,
+            top_n=top_n,
+            timestamp=ts,
+            inventory_provided=inventory_provided,
+        )
+        return render_executive_png(model)
+    return render_full_matrix_png(projection, timestamp=ts)
+
+
 def render_matrix_svg(
     projection: MatrixProjection,
     *,
-    style: StyleName = "slide",
+    style: StyleName | str = "executive",
     timestamp: datetime | None = None,
 ) -> bytes:
     """Optional lightweight SVG (same metadata/footer as PNG)."""
+    style_key = normalize_style(style)
     ts = timestamp or _utc_now()
-    title, subtitle = _title_lines(projection, style)
+    title, subtitle = _title_lines(projection, style_key)
     footer = _footer_text(projection, ts)
     legend = _legend_text()
-    width, height = (1920, 1080) if style == "slide" else (2400, max(900, 120 + 28 * len(projection.rows)))
+    width, height = (1920, 1080) if style_key == "executive" else (
+        2400,
+        max(900, 120 + 28 * len(projection.rows)),
+    )
 
     def esc(s: str) -> str:
         return (
@@ -408,64 +452,100 @@ def _matrix_kwargs_from_matrix(matrix: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _csv_for_style(
+    projection: MatrixProjection,
+    *,
+    style: StyleName,
+    top_n: int,
+    timestamp: datetime,
+    inventory_provided: bool | None,
+    include_use_case: bool,
+) -> bytes:
+    if style == "executive":
+        model = build_executive_slide(
+            projection,
+            top_n=top_n,
+            timestamp=timestamp,
+            inventory_provided=inventory_provided,
+        )
+        return executive_csv_bytes(model)
+    return projection_to_csv(projection, include_use_case=include_use_case)
+
+
 def export_routing_matrix(
     matrix: dict[str, Any] | MatrixProjection,
     *,
     format: FormatName = "csv",
-    style: StyleName = "slide",
+    style: StyleName | str = "executive",
     timestamp: datetime | None = None,
     include_use_case: bool = False,
+    top_n: int = DEFAULT_TOP_N,
+    inventory_provided: bool | None = None,
 ) -> ExportResult:
-    """Export the current-view projection (exact UI rows/cols)."""
+    """Export the current-view projection (exact UI rows/cols / ranked top-N)."""
     ts = timestamp or _utc_now()
     projection = (
         matrix
         if isinstance(matrix, MatrixProjection)
         else get_current_matrix_projection(matrix)
     )
+    style_key = normalize_style(style)
     fmt = format.lower()  # type: ignore[assignment]
     if fmt not in ("png", "csv", "zip", "svg"):
         raise ValueError(f"Unsupported format: {format}")
-    if style not in ("slide", "full"):
-        raise ValueError(f"Unsupported style: {style}")
+
+    inv = inventory_provided if inventory_provided is not None else projection.inventory_provided
 
     base_name = export_filename(
         use_case=projection.use_case_id,
         lifecycle=projection.lifecycle_mode,
         view=projection.view_mode,
-        style=style,
+        style=style_key,
         fmt=fmt if fmt != "zip" else "zip",
         scope="current",
         timestamp=ts,
     )
 
     if fmt == "csv":
-        data = projection_to_csv(projection, include_use_case=include_use_case)
+        data = _csv_for_style(
+            projection,
+            style=style_key,
+            top_n=top_n,
+            timestamp=ts,
+            inventory_provided=inv,
+            include_use_case=include_use_case or style_key == "executive",
+        )
         return ExportResult(
             data=data,
             filename=base_name,
             mime="text/csv",
             format="csv",
-            style=style,
+            style=style_key,
             scope="current",
         )
     if fmt == "png":
-        data = render_matrix_png(projection, style=style, timestamp=ts)
+        data = render_matrix_png(
+            projection,
+            style=style_key,
+            timestamp=ts,
+            top_n=top_n,
+            inventory_provided=inv,
+        )
         return ExportResult(
             data=data,
             filename=base_name.replace(".zip", ".png") if base_name.endswith(".zip") else base_name,
             mime="image/png",
             format="png",
-            style=style,
+            style=style_key,
             scope="current",
         )
     if fmt == "svg":
-        data = render_matrix_svg(projection, style=style, timestamp=ts)
+        data = render_matrix_svg(projection, style=style_key, timestamp=ts)
         name = base_name if base_name.endswith(".svg") else export_filename(
             use_case=projection.use_case_id,
             lifecycle=projection.lifecycle_mode,
             view=projection.view_mode,
-            style=style,
+            style=style_key,
             fmt="svg",
             scope="current",
             timestamp=ts,
@@ -475,12 +555,17 @@ def export_routing_matrix(
             filename=name,
             mime="image/svg+xml",
             format="svg",
-            style=style,
+            style=style_key,
             scope="current",
         )
 
-    # Current-view ZIP: README + csv + png (+ svg)
-    return _zip_single(projection, style=style, timestamp=ts)
+    return _zip_single(
+        projection,
+        style=style_key,
+        timestamp=ts,
+        top_n=top_n,
+        inventory_provided=inv,
+    )
 
 
 def _readme_text(
@@ -508,14 +593,15 @@ def _readme_text(
         "",
         "Contents:",
         "- index.csv — manifest of included use cases / files",
-        "- all-use-cases.csv — combined cell rows (all-use-cases scope)",
-        "- <use-case>/matrix.png + matrix.csv — per use case (ZIP bundle)",
+        "- all-use-cases.csv — combined rows (style-dependent)",
+        "- per use case PNG + CSV",
         "",
         "Use cases:",
         *[f"  - {uc}" for uc in use_cases],
         "",
         "Semantics are identical to the Streamlit AMD Routing Matrix projection.",
         "Statuses, confidence, and evidence are not upgraded for presentation.",
+        "Runtime availability is shown separately from canonical ranking.",
         "",
     ]
     return "\n".join(lines)
@@ -526,9 +612,13 @@ def _zip_single(
     *,
     style: StyleName,
     timestamp: datetime,
+    top_n: int,
+    inventory_provided: bool | None,
 ) -> ExportResult:
     buf = io.BytesIO()
     uc = _sanitize_token(projection.use_case_id, fallback="matrix")
+    png_name = "executive.png" if style == "executive" else "matrix.png"
+    csv_name = "executive.csv" if style == "executive" else "matrix.csv"
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr(
             "README.txt",
@@ -548,19 +638,37 @@ def _zip_single(
         w.writerow(
             {
                 "use_case": projection.use_case_id,
-                "png": f"{uc}/matrix.png",
-                "csv": f"{uc}/matrix.csv",
-                "rows": len(projection.rows),
+                "png": f"{uc}/{png_name}",
+                "csv": f"{uc}/{csv_name}",
+                "rows": (
+                    min(top_n, len(projection.source.get("ranked") or []))
+                    if style == "executive"
+                    else len(projection.rows)
+                ),
                 "columns": len(projection.columns),
             }
         )
         zf.writestr("index.csv", idx.getvalue())
-        zf.writestr(f"{uc}/matrix.csv", projection_to_csv(projection, include_use_case=True))
-        zf.writestr(f"{uc}/matrix.png", render_matrix_png(projection, style=style, timestamp=timestamp))
-        zf.writestr(
-            "all-use-cases.csv",
-            projection_to_csv(projection, include_use_case=True),
+        csv_data = _csv_for_style(
+            projection,
+            style=style,
+            top_n=top_n,
+            timestamp=timestamp,
+            inventory_provided=inventory_provided,
+            include_use_case=True,
         )
+        zf.writestr(f"{uc}/{csv_name}", csv_data)
+        zf.writestr(
+            f"{uc}/{png_name}",
+            render_matrix_png(
+                projection,
+                style=style,
+                timestamp=timestamp,
+                top_n=top_n,
+                inventory_provided=inventory_provided,
+            ),
+        )
+        zf.writestr("all-use-cases.csv", csv_data)
     name = export_filename(
         use_case=projection.use_case_id,
         lifecycle=projection.lifecycle_mode,
@@ -585,9 +693,10 @@ def export_all_use_cases(
     *,
     matrix_kwargs: dict[str, Any] | None = None,
     format: FormatName = "zip",
-    style: StyleName = "slide",
+    style: StyleName | str = "executive",
     timestamp: datetime | None = None,
     endpoints: list[dict[str, Any]] | None = None,
+    top_n: int = DEFAULT_TOP_N,
 ) -> ExportResult:
     """Iterate catalog use cases with the same lifecycle/objective/view filters.
 
@@ -595,6 +704,7 @@ def export_all_use_cases(
     not a valid multi-use-case single-file format.
     """
     ts = timestamp or _utc_now()
+    style_key = normalize_style(style)
     kwargs = dict(matrix_kwargs or {})
     kwargs.setdefault("view_mode", "portfolio")
     kwargs.setdefault("show", "all")
@@ -614,16 +724,35 @@ def export_all_use_cases(
         fmt = "zip"
 
     if fmt == "csv":
-        # Combined CSV only
-        all_rows: list[dict[str, Any]] = []
-        for proj in projections:
-            all_rows.extend(projection_to_csv_rows(proj, include_use_case=True))
-        data = csv_bytes_from_rows(all_rows, include_use_case=True)
+        if style_key == "executive":
+            all_rows: list[dict[str, Any]] = []
+            fields: list[str] = []
+            for proj in projections:
+                model = build_executive_slide(proj, top_n=top_n, timestamp=ts)
+                text = executive_csv_bytes(model).decode("utf-8")
+                reader = csv.DictReader(io.StringIO(text))
+                fields = list(reader.fieldnames or fields)
+                all_rows.extend(list(reader))
+            buf = io.StringIO()
+            if not fields:
+                from token_factory.routing_matrix.executive import EXECUTIVE_CSV_FIELDS
+
+                fields = list(EXECUTIVE_CSV_FIELDS)
+            writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
+            writer.writeheader()
+            for row in all_rows:
+                writer.writerow(row)
+            data = buf.getvalue().encode("utf-8")
+        else:
+            all_rows = []
+            for proj in projections:
+                all_rows.extend(projection_to_csv_rows(proj, include_use_case=True))
+            data = csv_bytes_from_rows(all_rows, include_use_case=True)
         name = export_filename(
             use_case="all-use-cases",
             lifecycle=kwargs.get("lifecycle_mode"),
             view=kwargs.get("view_mode"),
-            style=style,
+            style=style_key,
             fmt="csv",
             scope="all",
             timestamp=ts,
@@ -633,12 +762,12 @@ def export_all_use_cases(
             filename=name,
             mime="text/csv",
             format="csv",
-            style=style,
+            style=style_key,
             scope="all",
             note=note,
         )
 
-    # ZIP bundle (default for all / png coercion)
+    # ZIP bundle
     buf = io.BytesIO()
     lifecycle = kwargs.get("lifecycle_mode")
     view = kwargs.get("view_mode")
@@ -648,7 +777,7 @@ def export_all_use_cases(
             "README.txt",
             _readme_text(
                 scope="all",
-                style=style,
+                style=style_key,
                 lifecycle=lifecycle,
                 view=view,
                 policy_version=policy_version,
@@ -659,31 +788,65 @@ def export_all_use_cases(
         idx = io.StringIO()
         w = csv.DictWriter(idx, fieldnames=["use_case", "png", "csv", "rows", "columns"])
         w.writeheader()
-        all_rows = []
-        for proj in projections:
+        combined_parts: list[bytes] = []
+        for i, proj in enumerate(projections, start=1):
             uc = _sanitize_token(proj.use_case_id, fallback="matrix")
-            png_path = f"{uc}/matrix.png"
-            csv_path = f"{uc}/matrix.csv"
+            if style_key == "executive":
+                png_path = f"{i:02d}-{uc}-executive.png"
+                csv_path = f"{i:02d}-{uc}-executive.csv"
+            else:
+                png_path = f"{uc}/matrix.png"
+                csv_path = f"{uc}/matrix.csv"
+            slide = build_executive_slide(proj, top_n=top_n, timestamp=ts)
+            csv_data = (
+                executive_csv_bytes(slide)
+                if style_key == "executive"
+                else projection_to_csv(proj, include_use_case=True)
+            )
+            png_data = render_matrix_png(
+                proj,
+                style=style_key,
+                timestamp=ts,
+                top_n=top_n,
+            )
             w.writerow(
                 {
                     "use_case": proj.use_case_id,
                     "png": png_path,
                     "csv": csv_path,
-                    "rows": len(proj.rows),
+                    "rows": len(slide.alternatives) if style_key == "executive" else len(proj.rows),
                     "columns": len(proj.columns),
                 }
             )
-            zf.writestr(csv_path, projection_to_csv(proj, include_use_case=True))
-            zf.writestr(png_path, render_matrix_png(proj, style=style, timestamp=ts))
-            all_rows.extend(projection_to_csv_rows(proj, include_use_case=True))
+            zf.writestr(csv_path, csv_data)
+            zf.writestr(png_path, png_data)
+            combined_parts.append(csv_data)
         zf.writestr("index.csv", idx.getvalue())
-        zf.writestr("all-use-cases.csv", csv_bytes_from_rows(all_rows, include_use_case=True))
+        # Combined CSV (re-header once)
+        if style_key == "executive":
+            all_rows = []
+            fields: list[str] = []
+            for part in combined_parts:
+                reader = csv.DictReader(io.StringIO(part.decode("utf-8")))
+                fields = list(reader.fieldnames or fields)
+                all_rows.extend(list(reader))
+            cbuf = io.StringIO()
+            cw = csv.DictWriter(cbuf, fieldnames=fields or ["use_case"], extrasaction="ignore")
+            cw.writeheader()
+            for row in all_rows:
+                cw.writerow(row)
+            zf.writestr("all-use-cases.csv", cbuf.getvalue())
+        else:
+            all_rows = []
+            for proj in projections:
+                all_rows.extend(projection_to_csv_rows(proj, include_use_case=True))
+            zf.writestr("all-use-cases.csv", csv_bytes_from_rows(all_rows, include_use_case=True))
 
     name = export_filename(
         use_case="all-use-cases",
         lifecycle=lifecycle,
         view=view,
-        style=style,
+        style=style_key,
         fmt="zip",
         scope="all",
         timestamp=ts,
@@ -693,7 +856,7 @@ def export_all_use_cases(
         filename=name,
         mime="application/zip",
         format="zip",
-        style=style,
+        style=style_key,
         scope="all",
         note=note,
     )
@@ -705,24 +868,33 @@ def resolve_export(
     matrix: dict[str, Any] | None = None,
     scope: ScopeName = "current",
     format: FormatName = "png",
-    style: StyleName = "slide",
+    style: StyleName | str = "executive",
     matrix_kwargs: dict[str, Any] | None = None,
     endpoints: list[dict[str, Any]] | None = None,
     timestamp: datetime | None = None,
+    top_n: int = DEFAULT_TOP_N,
 ) -> ExportResult:
     """UI-facing resolver: Current View vs All Use Cases + invalid combo handling."""
+    style_key = normalize_style(style)
     if scope == "all":
         if engine is None:
             raise ValueError("engine is required for all-use-cases export")
-        kwargs = matrix_kwargs or ( _matrix_kwargs_from_matrix(matrix) if matrix else {} )
+        kwargs = matrix_kwargs or (_matrix_kwargs_from_matrix(matrix) if matrix else {})
         return export_all_use_cases(
             engine,
             matrix_kwargs=kwargs,
             format=format,
-            style=style,
+            style=style_key,
             timestamp=timestamp,
             endpoints=endpoints,
+            top_n=top_n,
         )
     if matrix is None:
         raise ValueError("matrix is required for current-view export")
-    return export_routing_matrix(matrix, format=format, style=style, timestamp=timestamp)
+    return export_routing_matrix(
+        matrix,
+        format=format,
+        style=style_key,
+        timestamp=timestamp,
+        top_n=top_n,
+    )

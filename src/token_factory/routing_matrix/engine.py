@@ -1846,6 +1846,9 @@ class RecommendationEngine:
             "show": show,
             "search": search,
             "vendor": vendor,
+            # Metadata only — does not affect ranking. Distinguishes missing
+            # inventory ("Not provided") from Not Deployed.
+            "inventory_provided": endpoints is not None,
         }
 
     def recommend_for_compute(

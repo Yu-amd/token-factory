@@ -36,6 +36,7 @@ class MatrixProjection:
     catalog_counts: dict[str, Any]
     coverage_warning: str | None
     source: dict[str, Any]
+    inventory_provided: bool = False
 
     def cell(self, model: str, compute: str) -> dict[str, Any] | None:
         return (self.cells.get(model) or {}).get(compute)
@@ -81,6 +82,15 @@ def get_current_matrix_projection(matrix: dict[str, Any]) -> MatrixProjection:
         use_case_id = str(use_case)
         use_case_name = use_case_id
 
+    inventory_provided = bool(matrix.get("inventory_provided"))
+    if "inventory_provided" not in matrix:
+        # Infer only when any cell reports a live endpoint (never invent Unavailable).
+        inventory_provided = any(
+            bool((cell or {}).get("endpoint_available"))
+            for model_cells in (matrix.get("cells") or {}).values()
+            for cell in (model_cells or {}).values()
+        )
+
     return MatrixProjection(
         rows=rows,
         columns=columns,
@@ -104,6 +114,7 @@ def get_current_matrix_projection(matrix: dict[str, Any]) -> MatrixProjection:
         catalog_counts=dict(matrix.get("catalog_counts") or {}),
         coverage_warning=matrix.get("coverage_warning"),
         source=matrix,
+        inventory_provided=inventory_provided,
     )
 
 

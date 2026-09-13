@@ -18,10 +18,15 @@ from token_factory.routing_matrix import (
     load_routing_bundle,
     resolve_export,
 )
-from token_factory.routing_matrix.export import (
+from token_factory.routing_matrix.executive import (
     ANTI_BENCHMARK,
+    build_executive_slide,
+    short_model_label,
+)
+from token_factory.routing_matrix.export import (
     CSV_FIELDS,
     export_filename,
+    normalize_style,
     projection_to_csv_rows,
 )
 from token_factory.routing_matrix.projection import display_columns, display_rows
@@ -58,16 +63,16 @@ def test_current_view_projection_matches_display_helpers():
         assert set(proj.cells[model].keys()) == set(proj.columns)
 
 
-def test_current_view_csv_exactness():
+def test_current_view_csv_exactness_full_matrix():
     matrix = _matrix(view_mode="portfolio", show="recommended", search="Qwen")
     proj = get_current_matrix_projection(matrix)
-    result = export_routing_matrix(matrix, format="csv", style="slide", timestamp=FIXED_TS)
+    result = export_routing_matrix(matrix, format="csv", style="full", timestamp=FIXED_TS)
     assert result.filename.startswith("token-factory-routing-")
     assert result.filename.endswith(".csv")
     text = result.data.decode("utf-8")
     reader = csv.DictReader(io.StringIO(text))
     fields = reader.fieldnames or []
-    assert "use_case" not in fields  # current-view default omits unless zip/all
+    assert "use_case" not in fields  # full current-view default omits unless zip/all
     assert "model" in fields and "compute" in fields
     assert "recommendation" in fields and "confidence" in fields
     rows = list(reader)
@@ -95,7 +100,7 @@ def test_export_does_not_change_status_or_confidence():
                 cell.get("matrix_mark"),
                 (matrix.get("row_status") or {}).get(model),
             )
-    export_routing_matrix(matrix, format="png", style="slide", timestamp=FIXED_TS)
+    export_routing_matrix(matrix, format="png", style="executive", timestamp=FIXED_TS)
     export_routing_matrix(matrix, format="csv", style="full", timestamp=FIXED_TS)
     for model, cols in (matrix.get("cells") or {}).items():
         for compute, cell in (cols or {}).items():
@@ -113,25 +118,25 @@ def test_filename_sanitized_and_prefixed():
         use_case="Coding Assistant!",
         lifecycle="production",
         view="executive",
-        style="slide",
+        style="executive",
         fmt="png",
         timestamp=FIXED_TS,
     )
     assert name == (
-        "token-factory-routing-coding-assistant-production-executive-slide-20260913T200000Z.png"
+        "token-factory-routing-coding-assistant-production-executive-executive-20260913T200000Z.png"
     )
     assert "!" not in name
     assert " " not in name
+    assert normalize_style("slide") == "executive"
 
 
 def test_png_signature_dimensions_and_metadata_strings():
     matrix = _matrix(view_mode="executive")
-    result = export_routing_matrix(matrix, format="png", style="slide", timestamp=FIXED_TS)
+    result = export_routing_matrix(matrix, format="png", style="executive", timestamp=FIXED_TS)
     assert result.data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(result.data) > 1000
     img = Image.open(io.BytesIO(result.data))
     assert img.size == (1920, 1080)
-    # Footer / anti-benchmark are rendered into the image; policy version on projection
     proj = get_current_matrix_projection(matrix)
     assert proj.policy_version
     assert ANTI_BENCHMARK
@@ -155,7 +160,7 @@ def test_export_metadata_includes_policy_and_legend_statuses():
     assert "capability_excluded" in names
 
 
-def test_all_use_cases_iterates_once_each():
+def test_all_use_cases_executive_zip_one_png_each():
     engine = _engine()
     expected_ids = [u["id"] for u in engine.list_use_cases()]
     result = export_all_use_cases(
@@ -167,7 +172,7 @@ def test_all_use_cases_iterates_once_each():
             "show": "all",
         },
         format="zip",
-        style="slide",
+        style="executive",
         timestamp=FIXED_TS,
     )
     assert result.scope == "all"
@@ -183,11 +188,12 @@ def test_all_use_cases_iterates_once_each():
         assert f"Policy version: {get_current_matrix_projection(_matrix()).policy_version}" in readme
         index = list(csv.DictReader(io.StringIO(zf.read("index.csv").decode("utf-8"))))
         assert [r["use_case"] for r in index] == expected_ids
-        for uc in expected_ids:
-            # sanitized folder
-            folder = uc  # ids are already sanitized kebab-case
-            assert f"{folder}/matrix.png" in names
-            assert f"{folder}/matrix.csv" in names
+        for i, uc in enumerate(expected_ids, start=1):
+            assert f"{i:02d}-{uc}-executive.png" in names
+            assert f"{i:02d}-{uc}-executive.csv" in names
+            png = zf.read(f"{i:02d}-{uc}-executive.png")
+            assert png[:8] == b"\x89PNG\r\n\x1a\n"
+            assert Image.open(io.BytesIO(png)).size == (1920, 1080)
         combined = list(csv.DictReader(io.StringIO(zf.read("all-use-cases.csv").decode("utf-8"))))
         assert combined
         assert "use_case" in (combined[0].keys())
@@ -200,7 +206,7 @@ def test_all_png_coerces_to_zip():
         engine=engine,
         scope="all",
         format="png",
-        style="slide",
+        style="executive",
         matrix_kwargs={"lifecycle_mode": "production", "view_mode": "portfolio", "show": "recommended"},
         timestamp=FIXED_TS,
     )
@@ -208,10 +214,10 @@ def test_all_png_coerces_to_zip():
     assert result.note
     assert "ZIP" in result.note
     with zipfile.ZipFile(io.BytesIO(result.data)) as zf:
-        assert any(n.endswith("matrix.png") for n in zf.namelist())
+        assert any(n.endswith("-executive.png") for n in zf.namelist())
 
 
-def test_current_zip_bundle_contents():
+def test_current_zip_bundle_contents_full():
     matrix = _matrix(use_case_id="simple-chat")
     result = export_routing_matrix(matrix, format="zip", style="full", timestamp=FIXED_TS)
     with zipfile.ZipFile(io.BytesIO(result.data)) as zf:
@@ -230,3 +236,129 @@ def test_csv_fields_are_real_only():
         assert field  # non-empty
     assert "winner" not in CSV_FIELDS
     assert "benchmark" not in CSV_FIELDS
+
+
+def test_executive_export_top_n():
+    matrix = _matrix()
+    proj = get_current_matrix_projection(matrix)
+    for n in (3, 5, 10):
+        slide = build_executive_slide(proj, top_n=n, timestamp=FIXED_TS)
+        assert len(slide.alternatives) <= n
+        assert slide.top_n == n
+        ranked = list(matrix.get("ranked") or [])
+        assert len(slide.alternatives) == min(n, len(ranked))
+    csv_result = export_routing_matrix(
+        matrix, format="csv", style="executive", top_n=3, timestamp=FIXED_TS
+    )
+    rows = list(csv.DictReader(io.StringIO(csv_result.data.decode("utf-8"))))
+    assert len(rows) == 3
+    assert rows[0]["rank"] == "1"
+
+
+def test_executive_preferred_matches_canonical_ranking():
+    matrix = _matrix()
+    ranked = matrix["ranked"]
+    assert ranked
+    proj = get_current_matrix_projection(matrix)
+    slide = build_executive_slide(proj, top_n=5, timestamp=FIXED_TS)
+    assert slide.preferred is not None
+    assert slide.preferred.model == ranked[0]["model"]
+    assert slide.preferred.compute == ranked[0]["compute"]
+    assert slide.preferred.confidence == str(ranked[0].get("confidence") or "—")
+    assert slide.preferred.recommendation == "Preferred" or ranked[0]["recommendation"]
+    for i, row in enumerate(slide.alternatives):
+        assert row.model == ranked[i]["model"]
+        assert row.compute == ranked[i]["compute"]
+
+
+def test_runtime_does_not_rewrite_preferred():
+    engine = _engine()
+    base = engine.matrix(
+        "coding-assistant",
+        objective="balanced",
+        lifecycle_mode="production",
+        show="all",
+    )
+    preferred = base["ranked"][0]
+    alt = next(
+        c
+        for c in base["ranked"][1:]
+        if (c["model"], c["compute"]) != (preferred["model"], preferred["compute"])
+    )
+    endpoints = [
+        {
+            "id": "alt-live",
+            "model": alt["model"],
+            "accelerator": alt["compute"],
+            "enabled": True,
+        }
+    ]
+    matrix = engine.matrix(
+        "coding-assistant",
+        objective="balanced",
+        lifecycle_mode="production",
+        show="all",
+        endpoints=endpoints,
+    )
+    assert matrix["inventory_provided"] is True
+    ranked = matrix["ranked"]
+    assert ranked[0]["model"] == preferred["model"]
+    assert ranked[0]["compute"] == preferred["compute"]
+    assert ranked[0].get("endpoint_available") is False
+    proj = get_current_matrix_projection(matrix)
+    slide = build_executive_slide(proj, top_n=5, timestamp=FIXED_TS)
+    assert slide.preferred is not None
+    assert slide.preferred.model == preferred["model"]
+    assert slide.preferred.compute == preferred["compute"]
+    assert slide.escalation is not None
+    assert "fallback" not in slide.runtime_banner.lower()
+    assert slide.escalation.reason == "Preferred target not deployed"
+    assert slide.escalation.selected_model == short_model_label(alt["model"])
+    assert slide.escalation.selected_compute == alt["compute"]
+
+
+def test_executive_confidence_evidence_policy_footer():
+    matrix = _matrix()
+    proj = get_current_matrix_projection(matrix)
+    slide = build_executive_slide(proj, top_n=5, timestamp=FIXED_TS)
+    assert slide.policy_version == proj.policy_version
+    assert ANTI_BENCHMARK in slide.footer
+    assert f"Policy v{proj.policy_version}" in slide.footer
+    assert "2026-09-13" in slide.footer
+    assert slide.preferred is not None
+    pe = slide.preferred.performance_evidence_status
+    if pe != "AMD_MEASURED":
+        assert any("Not yet available" in line or pe in line for line in slide.evidence_lines)
+    if str(slide.preferred.confidence).lower() != "high":
+        assert slide.confidence_caveat
+    # Inventory absent → Not provided (not Unavailable)
+    assert matrix.get("inventory_provided") is False
+    assert "Not provided" in slide.runtime_banner
+    assert "Unavailable" not in slide.runtime_banner
+
+
+def test_executive_available_when_preferred_deployed():
+    engine = _engine()
+    base = engine.matrix("coding-assistant", objective="balanced", lifecycle_mode="production")
+    pref = base["ranked"][0]
+    endpoints = [
+        {
+            "id": "pref-live",
+            "model": pref["model"],
+            "accelerator": pref["compute"],
+            "enabled": True,
+        }
+    ]
+    matrix = engine.matrix(
+        "coding-assistant",
+        objective="balanced",
+        lifecycle_mode="production",
+        endpoints=endpoints,
+    )
+    slide = build_executive_slide(
+        get_current_matrix_projection(matrix), top_n=5, timestamp=FIXED_TS
+    )
+    assert slide.escalation is None
+    assert slide.runtime_banner == "Runtime Status: Available"
+    assert slide.preferred is not None
+    assert slide.preferred.runtime == "Available"

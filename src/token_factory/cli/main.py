@@ -527,7 +527,9 @@ def matrix_export(
     format_name: str = typer.Option(
         "png", "--format", "-f", help="png|csv|zip|svg"
     ),
-    style: str = typer.Option("slide", "--style", help="slide|full"),
+    style: str = typer.Option(
+        "executive", "--style", help="executive|full (slide aliases executive)"
+    ),
     scope: str = typer.Option(
         "current", "--scope", help="current|all (all+png → zip of pngs)"
     ),
@@ -535,6 +537,7 @@ def matrix_export(
     lifecycle: str = typer.Option("production", "--lifecycle", "-L"),
     objective: str = typer.Option("balanced", "--objective", "-O"),
     show: str = typer.Option("all", "--show"),
+    top_n: int = typer.Option(5, "--top-n", help="Executive Slide top N (3|5|10)"),
 ) -> None:
     """Export Routing Matrix projection (PowerPoint-ready; not a benchmark)."""
     from token_factory.routing_matrix import RecommendationEngine, resolve_export
@@ -555,6 +558,7 @@ def matrix_export(
         scope="all" if scope == "all" else "current",  # type: ignore[arg-type]
         format=format_name,  # type: ignore[arg-type]
         style=style,  # type: ignore[arg-type]
+        top_n=top_n,
         matrix_kwargs={
             "objective": objective,
             "lifecycle_mode": lifecycle,
