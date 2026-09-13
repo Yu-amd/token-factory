@@ -40,9 +40,9 @@ Legacy style name `slide` aliases **Executive Slide**.
 ### Executive Slide zones
 
 1. **Header** — Token Factory Routing Matrix · use-case display name · lifecycle · objective · Policy vX · Canonical policy  
-2. **Preferred Route (policy)** — model, compute, confidence, 1–2 line canonical rationale; banner notes runtime inventory is not shown  
-3. **Policy-ranked alternatives** — Rank, Recommendation, Model (short label OK), Compute, Lifecycle, Confidence (no Runtime column)  
-4. **Evidence strip** + confidence caveat when not High (no fabricated AMD MEASURED)  
+2. **Preferred Route (policy)** — model, compute, 1–2 line canonical rationale; banner notes runtime inventory is not shown  
+3. **Policy-ranked alternatives** — Rank, Recommendation, Model (short label OK), Compute, Lifecycle (no Runtime / Confidence columns)  
+4. **Evidence strip** (no fabricated AMD MEASURED; confidence omitted from executive export)  
 5. **Footer** — anti-benchmark · timestamp · policy version  
 
 ## File naming

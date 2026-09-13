@@ -19,7 +19,7 @@ ANTI_BENCHMARK = "Routing policy output — not a benchmark"
 TopN = Literal[3, 5, 10]
 DEFAULT_TOP_N: TopN = 5
 
-# Policy-first: Executive Slide / CSV omit runtime inventory columns.
+# Policy-first: Executive Slide / CSV omit runtime inventory and confidence.
 EXECUTIVE_CSV_FIELDS = (
     "rank",
     "recommendation",
@@ -27,7 +27,6 @@ EXECUTIVE_CSV_FIELDS = (
     "model_label",
     "compute",
     "lifecycle",
-    "confidence",
     "use_case",
     "evidence_badge",
     "performance_evidence_status",
@@ -367,7 +366,6 @@ def executive_csv_bytes(model: ExecutiveSlideModel) -> bytes:
             "model_label": row.model_label,
             "compute": row.compute,
             "lifecycle": row.lifecycle,
-            "confidence": row.confidence,
             "use_case": model.use_case_id,
             "evidence_badge": row.evidence_badge,
             "performance_evidence_status": row.performance_evidence_status,
@@ -493,7 +491,7 @@ def render_executive_png(
         cy += 34
         draw.text(
             (cx, cy),
-            f"{model.preferred.compute}  ·  Confidence: {model.preferred.confidence}",
+            model.preferred.compute,
             fill="#b0b0b0",
             font=font_pref_meta,
         )
@@ -509,7 +507,7 @@ def render_executive_png(
 
     y = callout_top + callout_h + 22
 
-    # Ranked alternatives table (policy ranks — no Runtime column)
+    # Ranked alternatives table (policy ranks — no Runtime / Confidence columns)
     draw.text(
         (margin_x, y),
         f"Policy-ranked alternatives (top {model.top_n})",
@@ -518,8 +516,8 @@ def render_executive_png(
     )
     y += 26
 
-    headers = ["Rank", "Recommendation", "Model", "Compute", "Lifecycle", "Confidence"]
-    col_w = [80, 180, 520, 180, 160, 160]
+    headers = ["Rank", "Recommendation", "Model", "Compute", "Lifecycle"]
+    col_w = [80, 200, 620, 220, 200]
     total_fixed = sum(col_w)
     if total_fixed < content_w:
         col_w[2] += content_w - total_fixed
@@ -547,7 +545,6 @@ def render_executive_png(
             row.model_label if len(row.model_label) <= 48 else row.model_label[:45] + "…",
             row.compute,
             row.lifecycle,
-            row.confidence,
         ]
         x = margin_x + 10
         for col_i, (v, w) in enumerate(zip(vals, col_w, strict=True)):
@@ -557,8 +554,8 @@ def render_executive_png(
         y += row_h
 
     y += 20
-    # Evidence strip
-    strip_h = 118 if model.confidence_caveat else 92
+    # Evidence strip (no confidence labels on executive export)
+    strip_h = 92
     draw.rectangle(
         [margin_x, y, content_right, y + strip_h],
         fill="#141414",
@@ -568,13 +565,6 @@ def render_executive_png(
     for line in model.evidence_lines:
         draw.text((margin_x + 16, ey), line, fill="#9a9a9a", font=font_small)
         ey += 18
-    if model.confidence_caveat and model.preferred:
-        draw.text(
-            (margin_x + 16, ey + 4),
-            f"Confidence: {model.preferred.confidence} — {model.confidence_caveat}",
-            fill="#c4a35a",
-            font=font_small,
-        )
 
     # Footer
     draw.text(

@@ -255,6 +255,21 @@ def test_executive_export_top_n():
     assert rows[0]["rank"] == "1"
 
 
+def test_executive_csv_omits_confidence():
+    matrix = _matrix()
+    result = export_routing_matrix(
+        matrix, format="csv", style="executive", top_n=5, timestamp=FIXED_TS
+    )
+    reader = csv.DictReader(io.StringIO(result.data.decode("utf-8")))
+    fields = reader.fieldnames or []
+    assert "confidence" not in fields
+    assert "runtime" not in fields
+    assert "rank" in fields and "recommendation" in fields and "lifecycle" in fields
+    rows = list(reader)
+    assert rows
+    assert "confidence" not in rows[0]
+
+
 def test_executive_preferred_matches_canonical_ranking():
     matrix = _matrix()
     ranked = matrix["ranked"]
@@ -334,8 +349,6 @@ def test_executive_confidence_evidence_policy_footer():
     pe = slide.preferred.performance_evidence_status
     if pe != "AMD_MEASURED":
         assert any("Not yet available" in line or pe in line for line in slide.evidence_lines)
-    if str(slide.preferred.confidence).lower() != "high":
-        assert slide.confidence_caveat
     assert "Canonical policy" in slide.runtime_banner or "policy" in slide.runtime_banner.lower()
     assert "Unavailable" not in slide.runtime_banner
 
