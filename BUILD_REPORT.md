@@ -161,7 +161,7 @@ prompt:     "Solve the integral of x^2 from 0 to 1"
 |------|--------|
 | **Deliberate failure** | Primary backend IP patched to 127.0.0.1 |
 | **Expected** | Failover to fallback chain (20B general) |
-| **Observed** | HTTP **500** — automatic failover on AIGW priority `backendRefs` **not fully proven** |
+| **Observed** | HTTP **500** when primary broken; cross-model priority failover incorrectly hit the 20B host with a 120B model id (404). Compiler now restricts priority failover to **same-model** replicas only. |
 | **Compiler support** | Multi `backendRefs` priority 0/1 + `BackendTrafficPolicy` `/v1/models` health + retry |
 | **V2** | Prove end-to-end failover; integrate health-aware routing in policy engine |
 
