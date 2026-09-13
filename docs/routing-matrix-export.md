@@ -4,8 +4,10 @@ Export the **AMD Routing Matrix** projection as PNG, CSV, or a ZIP bundle for
 slides and reviews. Semantics match the Streamlit Matrix tab exactly.
 
 **This is routing policy output — not a benchmark.** Statuses, confidence, and
-evidence are never upgraded for presentation. Runtime availability is shown
-separately from canonical ranking (SHOULD RUN vs AVAILABLE NOW).
+evidence are never upgraded for presentation. **Executive Slide** is policy-first
+(SHOULD RUN): canonical preferred and ranked alternatives only. Runtime inventory
+(AVAILABLE NOW / escalation) belongs on Full Matrix, Simulate, and Automated Demo —
+not the executive export.
 
 ## What is exported
 
@@ -21,7 +23,7 @@ re-sorting.
 
 | Layout | Behavior |
 |--------|----------|
-| **Executive Slide** (primary) | 1920×1080 preferred-route callout + top-N alternatives table (default 5; optional 3/10), evidence strip, runtime escalation when preferred is not deployed |
+| **Executive Slide** (primary) | 1920×1080 policy preferred-route callout + top-N policy-ranked alternatives (default 5; optional 3/10), evidence strip — no runtime inventory / escalation |
 | **Full Matrix** | Larger canvas sized to the projected grid |
 
 Legacy style name `slide` aliases **Executive Slide**.
@@ -37,12 +39,11 @@ Legacy style name `slide` aliases **Executive Slide**.
 
 ### Executive Slide zones
 
-1. **Header** — Token Factory Routing Matrix · use-case display name · lifecycle · objective · Policy vX  
-2. **Preferred Route** — model, compute, confidence, 1–2 line canonical rationale  
-3. **Runtime** — `Runtime Status: Available` when preferred is deployed; **Runtime Escalation** box (canonical preferred vs runtime selected + reason) when not — never labeled “fallback”; `Runtime availability: Not provided` when inventory was not supplied  
-4. **Ranked alternatives** — Rank, Recommendation, Model (short label OK), Compute, Lifecycle, Confidence, Runtime  
-5. **Evidence strip** + confidence caveat when not High (no fabricated AMD MEASURED)  
-6. **Footer** — anti-benchmark · timestamp · policy version  
+1. **Header** — Token Factory Routing Matrix · use-case display name · lifecycle · objective · Policy vX · Canonical policy  
+2. **Preferred Route (policy)** — model, compute, confidence, 1–2 line canonical rationale; banner notes runtime inventory is not shown  
+3. **Policy-ranked alternatives** — Rank, Recommendation, Model (short label OK), Compute, Lifecycle, Confidence (no Runtime column)  
+4. **Evidence strip** + confidence caveat when not High (no fabricated AMD MEASURED)  
+5. **Footer** — anti-benchmark · timestamp · policy version  
 
 ## File naming
 

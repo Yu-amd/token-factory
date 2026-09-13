@@ -1297,8 +1297,8 @@ with tab_matrix:
                         "Layout",
                         ["Executive Slide", "Full Matrix"],
                         key="matrix_export_style",
-                        help="Executive Slide = 16:9 preferred route + top-5 alternatives. "
-                        "Full Matrix = exact projected grid.",
+                        help="Executive Slide = 16:9 policy preferred route + top-N "
+                        "(no runtime inventory). Full Matrix = exact projected grid.",
                     )
                     export_top_n = 5
                     if export_style.startswith("Executive"):

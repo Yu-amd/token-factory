@@ -19,6 +19,7 @@ ANTI_BENCHMARK = "Routing policy output — not a benchmark"
 TopN = Literal[3, 5, 10]
 DEFAULT_TOP_N: TopN = 5
 
+# Policy-first: Executive Slide / CSV omit runtime inventory columns.
 EXECUTIVE_CSV_FIELDS = (
     "rank",
     "recommendation",
@@ -27,7 +28,6 @@ EXECUTIVE_CSV_FIELDS = (
     "compute",
     "lifecycle",
     "confidence",
-    "runtime",
     "use_case",
     "evidence_badge",
     "performance_evidence_status",
@@ -318,27 +318,10 @@ def build_executive_slide(
     preferred_cell = top[0] if top else None
     preferred = rows[0] if rows else None
 
+    # Runtime inventory is tracked for Full Matrix / ops views — not Executive Slide.
+    # Keep escalation=None so the slide stays policy-first (SHOULD RUN, not AVAILABLE NOW).
     escalation: RuntimeEscalation | None = None
-    runtime_banner: str
-    if not inv:
-        runtime_banner = "Runtime availability: Not provided"
-    elif preferred_cell and preferred_cell.get("endpoint_available"):
-        runtime_banner = "Runtime Status: Available"
-    elif preferred_cell:
-        selected = next((c for c in ranked if c.get("endpoint_available")), None)
-        if selected:
-            escalation = RuntimeEscalation(
-                preferred_model=short_model_label(preferred_cell.get("model")),
-                preferred_compute=str(preferred_cell.get("compute") or "—"),
-                selected_model=short_model_label(selected.get("model")),
-                selected_compute=str(selected.get("compute") or "—"),
-                reason="Preferred target not deployed",
-            )
-            runtime_banner = "Runtime Escalation"
-        else:
-            runtime_banner = "Runtime Status: Not Deployed"
-    else:
-        runtime_banner = "Runtime availability: Not provided" if not inv else "Runtime Status: Unknown"
+    runtime_banner = "Canonical policy recommendation (runtime inventory not shown)"
 
     families: list[str] = []
     seen_f: set[str] = set()
@@ -385,7 +368,6 @@ def executive_csv_bytes(model: ExecutiveSlideModel) -> bytes:
                 "compute": row.compute,
                 "lifecycle": row.lifecycle,
                 "confidence": row.confidence,
-                "runtime": row.runtime,
                 "use_case": model.use_case_id,
                 "evidence_badge": row.evidence_badge,
                 "performance_evidence_status": row.performance_evidence_status,
@@ -478,14 +460,14 @@ def render_executive_png(
     y += 34
     meta = (
         f"{model.lifecycle_label}  ·  {model.objective_label}  ·  "
-        f"Policy v{model.policy_version or '—'}"
+        f"Policy v{model.policy_version or '—'}  ·  Canonical policy"
     )
     draw.text((margin_x, y), meta, fill="#8a8a8a", font=font_meta)
     y += 28
     if model.eligible_families:
         draw.text(
             (margin_x, y),
-            "Eligible compute estate: " + " · ".join(model.eligible_families),
+            "Policy-eligible compute families: " + " · ".join(model.eligible_families),
             fill="#666666",
             font=font_small,
         )
@@ -495,17 +477,16 @@ def render_executive_png(
     draw.line([(margin_x, y), (content_right, y)], fill="#2e2e2e", width=1)
     y += 18
 
-    # Preferred Route callout (left) + optional Runtime Escalation (right)
+    # Preferred Route callout — policy SHOULD RUN (full width; no runtime escalation box)
     callout_top = y
     callout_h = 200
-    left_w = int(content_w * 0.62) if model.escalation else content_w
     draw.rectangle(
-        [margin_x, callout_top, margin_x + left_w, callout_top + callout_h],
+        [margin_x, callout_top, content_right, callout_top + callout_h],
         fill="#161616",
         outline="#333333",
     )
     cx, cy = margin_x + 24, callout_top + 18
-    draw.text((cx, cy), "Preferred Route", fill="#8fd400", font=font_section)
+    draw.text((cx, cy), "Preferred Route (policy)", fill="#8fd400", font=font_section)
     cy += 26
     if model.preferred:
         draw.text((cx, cy), model.preferred.model_label, fill="#ffffff", font=font_pref_model)
@@ -517,64 +498,31 @@ def render_executive_png(
             font=font_pref_meta,
         )
         cy += 28
-        why_lines = _wrap_text(draw, f"Why: {model.rationale}", font_body, left_w - 48)
+        why_lines = _wrap_text(draw, f"Why: {model.rationale}", font_body, content_w - 48)
         for line in why_lines[:2]:
             draw.text((cx, cy), line, fill="#888888", font=font_body)
             cy += 20
-        if not model.escalation:
-            cy += 8
-            draw.text((cx, cy), model.runtime_banner, fill="#9a9a9a", font=font_small)
+        cy += 8
+        draw.text((cx, cy), model.runtime_banner, fill="#6a6a6a", font=font_small)
     else:
         draw.text((cx, cy), "No ranked preferred route", fill="#888888", font=font_pref_meta)
 
-    if model.escalation:
-        esc = model.escalation
-        rx0 = margin_x + left_w + 16
-        draw.rectangle(
-            [rx0, callout_top, content_right, callout_top + callout_h],
-            fill="#1a1814",
-            outline="#5a4a30",
-        )
-        ex, ey = rx0 + 20, callout_top + 18
-        draw.text((ex, ey), "Runtime Escalation", fill="#c4a35a", font=font_section)
-        ey += 28
-        draw.text((ex, ey), "Canonical Preferred", fill="#777777", font=font_small)
-        ey += 18
-        draw.text(
-            (ex, ey),
-            f"{esc.preferred_model} × {esc.preferred_compute}",
-            fill="#e8e8e8",
-            font=font_body,
-        )
-        ey += 26
-        draw.text((ex, ey), "Runtime Selected", fill="#777777", font=font_small)
-        ey += 18
-        draw.text(
-            (ex, ey),
-            f"{esc.selected_model} × {esc.selected_compute}",
-            fill="#e8e8e8",
-            font=font_body,
-        )
-        ey += 26
-        draw.text((ex, ey), f"Reason: {esc.reason}", fill="#a09070", font=font_small)
-
     y = callout_top + callout_h + 22
 
-    # Ranked alternatives table
+    # Ranked alternatives table (policy ranks — no Runtime column)
     draw.text(
         (margin_x, y),
-        f"Ranked alternatives (top {model.top_n})",
+        f"Policy-ranked alternatives (top {model.top_n})",
         fill="#8fd400",
         font=font_section,
     )
     y += 26
 
-    headers = ["Rank", "Recommendation", "Model", "Compute", "Lifecycle", "Confidence", "Runtime"]
-    col_w = [70, 160, 340, 140, 140, 140, 200]
-    # stretch last columns to fill
+    headers = ["Rank", "Recommendation", "Model", "Compute", "Lifecycle", "Confidence"]
+    col_w = [80, 180, 520, 180, 160, 160]
     total_fixed = sum(col_w)
     if total_fixed < content_w:
-        col_w[-1] += content_w - total_fixed
+        col_w[2] += content_w - total_fixed
 
     row_h = 36
     header_h = 34
@@ -596,11 +544,10 @@ def render_executive_png(
         vals = [
             str(row.rank if row.rank is not None else "—"),
             row.recommendation,
-            row.model_label if len(row.model_label) <= 36 else row.model_label[:33] + "…",
+            row.model_label if len(row.model_label) <= 48 else row.model_label[:45] + "…",
             row.compute,
             row.lifecycle,
             row.confidence,
-            row.runtime,
         ]
         x = margin_x + 10
         for col_i, (v, w) in enumerate(zip(vals, col_w, strict=True)):

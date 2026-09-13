@@ -21,7 +21,7 @@ from token_factory.routing_matrix import (
 from token_factory.routing_matrix.executive import (
     ANTI_BENCHMARK,
     build_executive_slide,
-    short_model_label,
+    render_executive_png,
 )
 from token_factory.routing_matrix.export import (
     CSV_FIELDS,
@@ -272,6 +272,7 @@ def test_executive_preferred_matches_canonical_ranking():
 
 
 def test_runtime_does_not_rewrite_preferred():
+    """Inventory must not change canonical preferred; Executive Slide stays policy-first."""
     engine = _engine()
     base = engine.matrix(
         "coding-assistant",
@@ -310,11 +311,15 @@ def test_runtime_does_not_rewrite_preferred():
     assert slide.preferred is not None
     assert slide.preferred.model == preferred["model"]
     assert slide.preferred.compute == preferred["compute"]
-    assert slide.escalation is not None
+    # Executive Slide is policy-first: no runtime escalation callout / rewrite
+    assert slide.escalation is None
+    assert "policy" in slide.runtime_banner.lower()
     assert "fallback" not in slide.runtime_banner.lower()
-    assert slide.escalation.reason == "Preferred target not deployed"
-    assert slide.escalation.selected_model == short_model_label(alt["model"])
-    assert slide.escalation.selected_compute == alt["compute"]
+    assert "Canonical policy recommendation" in slide.runtime_banner
+    png = render_executive_png(slide)
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    with Image.open(io.BytesIO(png)) as img:
+        assert img.size == (1920, 1080)
 
 
 def test_executive_confidence_evidence_policy_footer():
@@ -331,13 +336,12 @@ def test_executive_confidence_evidence_policy_footer():
         assert any("Not yet available" in line or pe in line for line in slide.evidence_lines)
     if str(slide.preferred.confidence).lower() != "high":
         assert slide.confidence_caveat
-    # Inventory absent → Not provided (not Unavailable)
-    assert matrix.get("inventory_provided") is False
-    assert "Not provided" in slide.runtime_banner
+    assert "Canonical policy" in slide.runtime_banner or "policy" in slide.runtime_banner.lower()
     assert "Unavailable" not in slide.runtime_banner
 
 
 def test_executive_available_when_preferred_deployed():
+    """Deployed inventory must not change Executive Slide away from policy framing."""
     engine = _engine()
     base = engine.matrix("coding-assistant", objective="balanced", lifecycle_mode="production")
     pref = base["ranked"][0]
@@ -358,7 +362,7 @@ def test_executive_available_when_preferred_deployed():
     slide = build_executive_slide(
         get_current_matrix_projection(matrix), top_n=5, timestamp=FIXED_TS
     )
-    assert slide.escalation is None
-    assert slide.runtime_banner == "Runtime Status: Available"
     assert slide.preferred is not None
-    assert slide.preferred.runtime == "Available"
+    assert slide.preferred.model == pref["model"]
+    assert slide.escalation is None
+    assert "policy" in slide.runtime_banner.lower()
