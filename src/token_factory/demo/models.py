@@ -74,8 +74,20 @@ class DemoRequest:
                 return ValidationStatus.PASS
         return ValidationStatus.NA
 
+    def presentation(self):
+        """Executive-facing status (ADVISORY vs WARN); does not alter validation."""
+        from token_factory.demo.presentation import classify_presentation_status
+
+        return classify_presentation_status(self.validation, self.actual, self.expected)
+
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        overall = self.overall()
+        pres = self.presentation()
+        data["validation_status"] = overall.value
+        data["presentation_status"] = pres.status
+        data["advisory_reason"] = pres.advisory_reason
+        return data
 
 
 @dataclass

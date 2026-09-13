@@ -140,6 +140,7 @@ def render_automated_demo_tab(
             done = sum(1 for r in run.requests if r.status in ("completed", "error"))
             progress.progress(min(1.0, done / total), text=f"Request {done}/{total}")
             a = req.actual or {}
+            pres = req.presentation()
             current_box.markdown(
                 f"**Current request** · {req.display_name or req.scenario_id}\n\n"
                 f"- Classified: `{a.get('classification_category') or a.get('classified_use_case')}`\n"
@@ -148,13 +149,14 @@ def render_automated_demo_tab(
                 f"{(a.get('canonical_preferred') or {}).get('compute', '—')}`\n"
                 f"- Runtime selected: "
                 f"`{a.get('selected_model') or '—'} × {a.get('selected_compute') or '—'}`\n"
-                f"- Validation: **{req.overall().value}**"
+                f"- Validation: **{pres.status}**"
+                + (f" · {pres.advisory_reason}" if pres.advisory_reason else "")
                 + (" · fallback" if a.get("fallback_used") else "")
                 + (" · runtime escalation" if a.get("runtime_escalation") else "")
             )
             feed.append(
                 {
-                    "status": req.overall().value,
+                    "status": pres.status,
                     "name": req.display_name or req.scenario_id,
                     "model": a.get("selected_model"),
                     "compute": a.get("selected_compute"),
@@ -195,6 +197,12 @@ def render_automated_demo_tab(
         return
 
     summary = data.get("validation_summary") or {}
+    warn_count = int(summary.get("warnings") or 0)
+    warn_card = ""
+    if warn_count > 0:
+        warn_card = f"""
+            <div><div style="color:#666;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;">Warnings</div>
+              <div style="color:#fcd34d;">{warn_count}</div></div>"""
     html(
         f"""
         <div class="tf-card" style="background:#141414;border:1px solid #333;border-radius:0.625rem;
@@ -210,16 +218,22 @@ def render_automated_demo_tab(
               <div style="color:#e8e8e8;">{summary.get('completed', 0)} / {summary.get('requests', 0)}</div></div>
             <div><div style="color:#666;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;">Passed</div>
               <div style="color:#8fd400;">{summary.get('passed', 0)}</div></div>
-            <div><div style="color:#666;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;">Warnings</div>
-              <div style="color:#fcd34d;">{summary.get('warnings', 0)}</div></div>
+            <div><div style="color:#666;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;">Advisory</div>
+              <div style="color:#93c5fd;">{summary.get('advisory', 0)}</div></div>
+            {warn_card}
             <div><div style="color:#666;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;">Failed</div>
               <div style="color:#fca5a5;">{summary.get('failed', 0)}</div></div>
-            <div><div style="color:#666;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;">Fallbacks</div>
-              <div style="color:#e8e8e8;">{summary.get('fallbacks', 0)}</div></div>
             <div><div style="color:#666;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;">Runtime escalations</div>
               <div style="color:#e8e8e8;">{summary.get('runtime_escalations', 0)}</div></div>
+            <div><div style="color:#666;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;">Fallbacks</div>
+              <div style="color:#e8e8e8;">{summary.get('fallbacks', 0)}</div></div>
           </div>
-          <p style="color:#666;font-size:0.78rem;margin:0.9rem 0 0;">
+          <p style="color:#999;font-size:0.78rem;margin:0.9rem 0 0.35rem;">
+            <strong style="color:#e8e8e8;">Advisory</strong> = policy-valid route under a runtime or deployment constraint.
+            &nbsp;·&nbsp;
+            <strong style="color:#e8e8e8;">Warning</strong> = unexpected non-fatal issue requiring attention.
+          </p>
+          <p style="color:#666;font-size:0.78rem;margin:0;">
             Distributions below show routing coverage — not performance comparisons.
           </p>
         </div>
@@ -245,13 +259,17 @@ def render_automated_demo_tab(
         can = a.get("canonical_preferred") or {}
         rows.append(
             {
-                "status": _overall_from_validation(r.get("validation") or {}),
+                "status": r.get("presentation_status")
+                or _presentation_from_request(r),
                 "scenario": r.get("display_name") or r.get("scenario_id"),
                 "classified": a.get("classification_category") or a.get("classified_use_case"),
                 "canonical": f"{can.get('model', '—')} × {can.get('compute', '—')}",
                 "runtime": f"{a.get('selected_model') or '—'} × {a.get('selected_compute') or '—'}",
+                "advisory_reason": r.get("advisory_reason"),
                 "fallback": a.get("fallback_used"),
                 "runtime_escalation": a.get("runtime_escalation"),
+                "validation": r.get("validation_status")
+                or _overall_from_validation(r.get("validation") or {}),
                 "classification": (r.get("validation") or {}).get("classification"),
                 "policy": (r.get("validation") or {}).get("policy"),
                 "lifecycle": (r.get("validation") or {}).get("lifecycle"),
@@ -288,6 +306,9 @@ def render_automated_demo_tab(
                         )
                     },
                     "validation": detail.get("validation"),
+                    "validation_status": detail.get("validation_status"),
+                    "presentation_status": detail.get("presentation_status"),
+                    "advisory_reason": detail.get("advisory_reason"),
                     "telemetry": detail.get("telemetry"),
                 }
             )
@@ -304,6 +325,16 @@ def _overall_from_validation(validation: dict[str, str]) -> str:
     if any(v == "PASS" for v in vals):
         return "PASS"
     return "N/A"
+
+
+def _presentation_from_request(request: dict[str, Any]) -> str:
+    from token_factory.demo.presentation import classify_presentation_status
+
+    return classify_presentation_status(
+        request.get("validation") or {},
+        request.get("actual") or {},
+        request.get("expected") or {},
+    ).status
 
 
 def _render_history_and_links(
@@ -346,6 +377,7 @@ def _render_history_and_links(
                     "pack": r.get("scenario_pack"),
                     "started": r.get("started_at"),
                     "passed": (r.get("validation_summary") or {}).get("passed"),
+                    "advisory": (r.get("validation_summary") or {}).get("advisory"),
                     "failed": (r.get("validation_summary") or {}).get("failed"),
                     "fallbacks": (r.get("validation_summary") or {}).get("fallbacks"),
                     "escalations": (r.get("validation_summary") or {}).get(

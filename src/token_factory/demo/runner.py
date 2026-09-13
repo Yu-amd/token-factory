@@ -473,22 +473,29 @@ class DemoRunner:
 
     @staticmethod
     def _summarize(run: DemoRun) -> dict[str, Any]:
+        from token_factory.demo.presentation import PresentationStatus, classify_presentation_status
+
         total = len(run.requests)
-        passed = warn = failed = 0
+        passed = advisory = warn = failed = 0
         fallbacks = 0
         runtime_escalations = 0
+        advisory_reasons: Counter[str] = Counter()
         dim_counts: dict[str, Counter[str]] = {
             d: Counter() for d in (
                 "classification", "policy", "capability", "lifecycle", "route", "endpoint", "telemetry"
             )
         }
         for r in run.requests:
-            overall = r.overall()
-            if overall == ValidationStatus.PASS:
+            pres = classify_presentation_status(r.validation, r.actual, r.expected)
+            if pres.status == PresentationStatus.PASS.value:
                 passed += 1
-            elif overall == ValidationStatus.WARN:
+            elif pres.status == PresentationStatus.ADVISORY.value:
+                advisory += 1
+                if pres.advisory_reason:
+                    advisory_reasons[pres.advisory_reason] += 1
+            elif pres.status == PresentationStatus.WARN.value:
                 warn += 1
-            elif overall == ValidationStatus.FAIL:
+            elif pres.status == PresentationStatus.FAIL.value:
                 failed += 1
             if (r.actual or {}).get("fallback_used"):
                 fallbacks += 1
@@ -501,10 +508,12 @@ class DemoRunner:
             "requests": total,
             "completed": sum(1 for r in run.requests if r.status == "completed"),
             "passed": passed,
+            "advisory": advisory,
             "warnings": warn,
             "failed": failed,
             "fallbacks": fallbacks,
             "runtime_escalations": runtime_escalations,
+            "advisory_reasons": dict(advisory_reasons),
             "policy_ok": run.policy_ok(),
             "dimensions": {k: dict(v) for k, v in dim_counts.items()},
         }

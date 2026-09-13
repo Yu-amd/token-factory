@@ -9,7 +9,7 @@ import pytest
 
 from token_factory.demo.injection import apply_endpoint_overlay, normalize_injections
 from token_factory.demo.loader import expand_requests, list_packs, load_pack, scenarios_dir
-from token_factory.demo.models import ValidationStatus
+from token_factory.demo.models import DemoRequest, ValidationStatus
 from token_factory.demo.normalize import classification_matches, normalize_label
 from token_factory.demo.observability import DemoInstrumentor
 from token_factory.demo.runner import DemoRunner
@@ -445,3 +445,311 @@ def test_pack_yaml_no_benchmark_portal_language():
         assert "leaderboard" not in raw
         assert "hardware shootout" not in raw or "not a hardware shootout" in raw
         assert "performance winner" not in raw
+
+
+# --- Presentation layer (ADVISORY vs WARN) ---
+
+
+def test_presentation_runtime_inventory_constraint():
+    from token_factory.demo.presentation import classify_presentation_status
+
+    result = classify_presentation_status(
+        {"route": "WARN", "policy": "PASS", "telemetry": "PASS"},
+        {
+            "preferred_not_deployed": True,
+            "canonical_preferred": {"model": "A", "compute": "MI355X"},
+            "runtime_selected": None,
+        },
+        {"routing": {}},
+    )
+    assert result.status == "ADVISORY"
+    assert result.advisory_reason == "runtime_inventory_constraint"
+    assert result.message
+
+
+def test_presentation_local_candidate_unavailable():
+    from token_factory.demo.presentation import classify_presentation_status
+
+    result = classify_presentation_status(
+        {"policy": "WARN", "route": "PASS", "telemetry": "PASS"},
+        {
+            "no_local_candidate": True,
+            "selected_compute_family": "instinct",
+            "runtime_selected": {"model": "x", "compute": "MI300X", "family": "instinct"},
+            "preferred_not_deployed": True,
+        },
+        {"routing": {"require_local": True, "allow_no_runtime": True, "preferred_compute_family": ["radeon"]}},
+    )
+    assert result.status == "ADVISORY"
+    assert result.advisory_reason == "local_candidate_unavailable"
+
+
+def test_presentation_soft_family_tendency_mismatch():
+    from token_factory.demo.presentation import classify_presentation_status
+
+    result = classify_presentation_status(
+        {"policy": "WARN", "route": "PASS", "telemetry": "PASS"},
+        {
+            "selected_compute_family": "instinct",
+            "runtime_selected": {"model": "x", "compute": "MI300X", "family": "instinct"},
+        },
+        {
+            "routing": {
+                "compute_family_tendency": "epyc",
+                "preferred_compute_family": ["epyc", "instinct"],
+            }
+        },
+    )
+    assert result.status == "ADVISORY"
+    assert result.advisory_reason == "soft_family_tendency_mismatch"
+
+
+def test_presentation_preferred_compute_unavailable():
+    from token_factory.demo.presentation import classify_presentation_status
+
+    result = classify_presentation_status(
+        {"policy": "WARN", "route": "PASS", "telemetry": "PASS"},
+        {
+            "selected_compute_family": "instinct",
+            "runtime_selected": {"model": "x", "compute": "MI300X", "family": "instinct"},
+        },
+        {"routing": {"preferred_compute_family": ["radeon"]}},
+    )
+    assert result.status == "ADVISORY"
+    assert result.advisory_reason == "preferred_compute_unavailable"
+
+
+def test_presentation_telemetry_stays_warn():
+    from token_factory.demo.presentation import classify_presentation_status
+
+    result = classify_presentation_status(
+        {"telemetry": "WARN", "route": "PASS", "policy": "PASS"},
+        {"runtime_selected": {"model": "x", "compute": "MI300X"}},
+        {"routing": {}},
+    )
+    assert result.status == "WARN"
+    assert result.advisory_reason == "observability_warning"
+
+
+def test_presentation_fail_unchanged():
+    from token_factory.demo.presentation import classify_presentation_status
+
+    result = classify_presentation_status(
+        {"classification": "FAIL", "policy": "PASS"},
+        {},
+        {},
+    )
+    assert result.status == "FAIL"
+    assert result.advisory_reason is None
+
+
+def test_presentation_pass_with_escalation_stays_pass():
+    """Runtime escalation is a routing event — not auto-ADVISORY."""
+    from token_factory.demo.presentation import classify_presentation_status
+
+    result = classify_presentation_status(
+        {
+            "classification": "PASS",
+            "policy": "PASS",
+            "capability": "PASS",
+            "lifecycle": "PASS",
+            "route": "PASS",
+            "endpoint": "PASS",
+            "telemetry": "PASS",
+        },
+        {
+            "preferred_not_deployed": True,
+            "runtime_escalation": True,
+            "runtime_selected": {"model": "b", "compute": "MI300X", "family": "instinct"},
+            "canonical_preferred": {"model": "a", "compute": "MI355X"},
+        },
+        {"routing": {"preferred_compute_family": ["instinct"]}},
+    )
+    assert result.status == "PASS"
+    assert result.advisory_reason is None
+
+
+def test_presentation_does_not_blindly_map_warn():
+    from token_factory.demo.presentation import classify_presentation_status
+
+    # WARN without soft structured explanation → stays WARN
+    result = classify_presentation_status(
+        {"capability": "WARN", "telemetry": "PASS"},
+        {"runtime_selected": None},
+        {"routing": {}},
+    )
+    assert result.status == "WARN"
+
+
+def test_request_exposes_validation_and_presentation_status():
+    req = DemoRequest(
+        demo_run_id="r1",
+        scenario_id="mix-local",
+        request_id="req-1",
+        prompt="local",
+        expected={"routing": {"require_local": True, "allow_no_runtime": True}},
+        actual={
+            "no_local_candidate": True,
+            "selected_compute_family": "instinct",
+            "runtime_selected": {"model": "x", "compute": "MI300X", "family": "instinct"},
+        },
+        validation={"policy": "WARN", "route": "PASS", "telemetry": "PASS"},
+    )
+    assert req.overall().value == "WARN"
+    d = req.to_dict()
+    assert d["validation_status"] == "WARN"
+    assert d["presentation_status"] == "ADVISORY"
+    assert d["advisory_reason"] == "local_candidate_unavailable"
+    assert d["validation"]["policy"] == "WARN"  # internal unchanged
+
+
+def _fake_request(
+    *,
+    validation: dict[str, str],
+    actual: dict | None = None,
+    expected: dict | None = None,
+    index: int = 0,
+) -> DemoRequest:
+    return DemoRequest(
+        demo_run_id="run",
+        scenario_id=f"s-{index}",
+        request_id=f"req-{index}",
+        prompt="p",
+        expected=expected or {},
+        actual=actual or {},
+        validation=validation,
+        index=index,
+        status="completed",
+    )
+
+
+def test_summary_counts_all_advisory_from_internal_warns():
+    """61 PASS + 39 internal WARN (all soft) → passed=61 advisory=39 warnings=0."""
+    from token_factory.demo.models import DemoRun
+    from token_factory.demo.runner import DemoRunner
+
+    requests = []
+    for i in range(61):
+        requests.append(
+            _fake_request(
+                validation={
+                    "classification": "PASS",
+                    "policy": "PASS",
+                    "route": "PASS",
+                    "telemetry": "PASS",
+                },
+                actual={"runtime_escalation": True, "preferred_not_deployed": True},
+                index=i,
+            )
+        )
+    for i in range(39):
+        requests.append(
+            _fake_request(
+                validation={"policy": "WARN", "route": "PASS", "telemetry": "PASS"},
+                actual={
+                    "preferred_not_deployed": True,
+                    "no_local_candidate": True,
+                    "selected_compute_family": "instinct",
+                    "runtime_selected": {
+                        "model": "x",
+                        "compute": "MI300X",
+                        "family": "instinct",
+                    },
+                },
+                expected={
+                    "routing": {
+                        "require_local": True,
+                        "allow_no_runtime": True,
+                        "preferred_compute_family": ["radeon"],
+                    }
+                },
+                index=61 + i,
+            )
+        )
+    run = DemoRun.create("enterprise-mixed", mock=True)
+    run.requests = requests
+    summary = DemoRunner._summarize(run)
+    assert summary["passed"] == 61
+    assert summary["advisory"] == 39
+    assert summary["warnings"] == 0
+    assert summary["failed"] == 0
+    assert summary["advisory_reasons"].get("local_candidate_unavailable") == 39
+    # Internal validation still WARN on those requests
+    assert sum(1 for r in requests if r.overall().value == "WARN") == 39
+
+
+def test_summary_counts_mixed_advisory_warn_fail():
+    from token_factory.demo.models import DemoRun
+    from token_factory.demo.runner import DemoRunner
+
+    requests = []
+    for i in range(60):
+        requests.append(
+            _fake_request(
+                validation={"classification": "PASS", "policy": "PASS", "telemetry": "PASS"},
+                index=i,
+            )
+        )
+    for i in range(35):
+        requests.append(
+            _fake_request(
+                validation={"policy": "WARN", "telemetry": "PASS"},
+                actual={
+                    "preferred_not_deployed": True,
+                    "runtime_selected": None,
+                },
+                expected={"routing": {}},
+                index=60 + i,
+            )
+        )
+    for i in range(4):
+        requests.append(
+            _fake_request(
+                validation={"telemetry": "WARN", "policy": "PASS"},
+                actual={},
+                expected={},
+                index=95 + i,
+            )
+        )
+    requests.append(
+        _fake_request(
+            validation={"classification": "FAIL"},
+            index=99,
+        )
+    )
+    run = DemoRun.create("mixed", mock=True)
+    run.requests = requests
+    summary = DemoRunner._summarize(run)
+    assert summary["passed"] == 60
+    assert summary["advisory"] == 35
+    assert summary["warnings"] == 4
+    assert summary["failed"] == 1
+    assert summary["policy_ok"] is False
+
+
+def test_enterprise_mixed_seed42_soft_warns_are_advisory():
+    """Live pack: soft locality WARNs present as ADVISORY; escalations stay PASS."""
+    runner = DemoRunner(mock=True)
+    run = runner.run(
+        "enterprise-mixed",
+        requests=100,
+        seed=42,
+        traffic="medium",
+        mock=True,
+        persist=False,
+    )
+    summary = run.validation_summary
+    assert summary["failed"] == 0
+    assert summary["requests"] == 100
+    assert summary["passed"] + summary["advisory"] + summary["warnings"] + summary[
+        "failed"
+    ] == 100
+    # Soft WARNs should not remain as user-facing warnings when classifiable
+    for r in run.requests:
+        if r.overall().value == "WARN":
+            assert r.presentation().status in ("ADVISORY", "WARN")
+            if (r.actual or {}).get("no_local_candidate"):
+                assert r.presentation().status == "ADVISORY"
+        if (r.actual or {}).get("runtime_escalation") and r.overall().value == "PASS":
+            assert r.presentation().status == "PASS"
+    assert summary["runtime_escalations"] > 0

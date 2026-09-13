@@ -1218,12 +1218,13 @@ def demo_run_cmd(
                 f"[bold]Automated Demo[/bold] · {run.scenario_pack}\n"
                 f"Run ID     {run.id}\n"
                 f"Lifecycle  {run.lifecycle_mode} · traffic {run.traffic_profile}\n"
-                f"Requests   {summary.get('requests')} · "
-                f"passed {summary.get('passed')} · "
-                f"warnings {summary.get('warnings')} · "
-                f"failed {summary.get('failed')} · "
-                f"fallbacks {summary.get('fallbacks')} · "
-                f"runtime escalations {summary.get('runtime_escalations')}\n"
+                f"Requests   {summary.get('requests')}\n"
+                f"Passed     {summary.get('passed', 0)}\n"
+                f"Advisory   {summary.get('advisory', 0)}\n"
+                f"Warnings   {summary.get('warnings', 0)}\n"
+                f"Failed     {summary.get('failed', 0)}\n"
+                f"Fallbacks             {summary.get('fallbacks', 0)}\n"
+                f"Runtime escalations   {summary.get('runtime_escalations', 0)}\n"
                 f"Mock       {run.mock} · artifact {run.meta.get('artifact', '—')}\n"
                 f"[dim]Routing-policy validation — not a benchmark[/dim]"
             )
@@ -1241,13 +1242,27 @@ def demo_run_cmd(
             compute = a.get("selected_compute") or ""
             table.add_row(
                 str(r.index + 1),
-                r.overall().value,
+                r.presentation().status,
                 r.display_name or r.scenario_id,
                 f"{model} / {compute}".strip(" /"),
                 "yes" if a.get("fallback_used") else "",
                 "yes" if a.get("runtime_escalation") else "",
             )
         console.print(table)
+        reasons = summary.get("advisory_reasons") or {}
+        if reasons:
+            console.print("\n[bold]Advisories[/bold]")
+            labels = {
+                "runtime_inventory_constraint": "runtime inventory constraints",
+                "preferred_compute_unavailable": "preferred compute unavailable",
+                "local_candidate_unavailable": "local target unavailable",
+                "lifecycle_evaluation": "evaluation lifecycle",
+                "soft_family_tendency_mismatch": "soft family tendency mismatch",
+                "allowed_no_runtime": "allowed no-runtime",
+                "other_warning": "other",
+            }
+            for key, count in sorted(reasons.items(), key=lambda kv: (-kv[1], kv[0])):
+                console.print(f"{count} {labels.get(key, key.replace('_', ' '))}")
 
     if ci and not summary.get("policy_ok"):
         raise typer.Exit(1)

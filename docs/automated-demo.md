@@ -35,8 +35,19 @@ Expected policy outcome
       ↕
 Actual runtime outcome
       ↓
-Validation result (PASS / WARN / FAIL / N/A)
+Internal validation (PASS / WARN / FAIL / N/A)
+      ↓
+Presentation status (PASS / ADVISORY / WARN / FAIL / N/A)
 ```
+
+| Presentation | Meaning |
+|--------------|---------|
+| **PASS** | Expected policy behavior. |
+| **ADVISORY** | Policy-valid outcome affected by runtime inventory, soft preference, locality, or evaluation lifecycle. |
+| **WARN** | Unexpected non-fatal condition requiring attention (e.g. telemetry gaps). |
+| **FAIL** | Routing/policy correctness violation. |
+
+Internal validation still uses `PASS` / `WARN` / `FAIL` / `N/A`. Soft inventory and locality WARNs are presented as **ADVISORY** for executive-facing summaries; telemetry issues stay **WARN**. Runtime escalation (`preferred not deployed → next eligible deployed`) remains a separate availability signal and may appear with **PASS**.
 
 Dimensions: **Classification · Policy · Capability · Lifecycle · Route · Endpoint · Telemetry**
 
