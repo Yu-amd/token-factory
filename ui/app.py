@@ -793,10 +793,22 @@ with tab_matrix:
             "Edge / Local": "edge",
         }
         show_opts = {
-            "Recommended + Supported": "recommended+supported",
-            "Recommended only": "recommended",
-            "Deployed only": "deployed",
-            "All eligible": "all",
+            "All AIMs": "all",
+            "Suitable": "suitable",
+            "Recommended": "recommended",
+            "Deployed": "deployed",
+            "Preview / Tech Preview": "preview-tp",
+            "Recommended + Supported": "suitable",
+        }
+        view_opts = {
+            "Portfolio Matrix (full catalog)": "portfolio",
+            "Executive View (truncated)": "executive",
+        }
+        compute_group_opts = {
+            "All compute": "all",
+            "Instinct": "instinct",
+            "EPYC": "epyc",
+            "Radeon": "radeon",
         }
 
         c1, c2, c3, c4, c5 = st.columns(5)
@@ -818,10 +830,12 @@ with tab_matrix:
                 else 0,
             )
         with c5:
-            show_label = st.selectbox("Show", list(show_opts.keys()), index=0)
+            view_label = st.selectbox("View", list(view_opts.keys()), index=0)
 
-        c6, c7, c8 = st.columns(3)
+        c6, c7, c8, c9 = st.columns(4)
         with c6:
+            show_label = st.selectbox("Show", list(show_opts.keys()), index=0)
+        with c7:
             serve_label = st.selectbox(
                 "Serving Pattern",
                 list(serve_opts.keys()),
@@ -830,14 +844,31 @@ with tab_matrix:
                 else 0,
                 help="Interactive ≠ high traffic. Batch ≠ high-concurrency interactive.",
             )
-        with c7:
+        with c8:
             util = st.select_slider(
                 "Traffic / utilization",
                 options=["low", "medium", "high"],
                 value="medium",
                 help="Traffic is independent of serving pattern and materially affects scores.",
             )
-        with c8:
+        with c9:
+            compute_group_label = st.selectbox(
+                "Compute columns",
+                list(compute_group_opts.keys()),
+                index=0,
+                help="Full compute catalog by default. Focus columns are ordering/Executive only.",
+            )
+
+        f1, f2, f3 = st.columns(3)
+        with f1:
+            search_q = st.text_input("Search models", value="", placeholder="e.g. Qwen, Llama, gemma")
+        with f2:
+            vendor_filter = st.text_input(
+                "Vendor filter",
+                value="",
+                placeholder="e.g. Qwen, meta-llama, google",
+            )
+        with f3:
             data_loc = st.checkbox(
                 "Data locality / privacy (prefer local Radeon)",
                 value=False,
@@ -899,6 +930,10 @@ with tab_matrix:
                 lifecycle_mode=life_mode,
                 data_locality=data_loc,
                 serving_pattern=serve_pattern,
+                view_mode=view_opts[view_label],
+                search=search_q or None,
+                vendor=vendor_filter or None,
+                compute_group=compute_group_opts[compute_group_label],
             )
             ranked = matrix.get("ranked") or []
             cards = matrix.get("summary_cards") or {}
@@ -984,29 +1019,54 @@ with tab_matrix:
                     """
                 )
 
-            # Matrix columns: Instinct (incl MI350P) + EPYC + Radeon — always keep focus cols
-            focus_col_ids = (
-                "MI300X",
-                "MI325X",
-                "MI350P",
-                "MI350X",
-                "MI355X",
-                "EPYC_9965",
-                "R9700",
-                "W7900",
-            )
-            focus_cols = [c for c in matrix["columns"] if c in focus_col_ids]
-            for required in ("MI350P", "R9700", "W7900"):
-                if required not in focus_cols and required in (matrix.get("columns") or []):
-                    focus_cols.append(required)
+            # Matrix columns: full compute catalog (group toggle); Executive uses focus ordering.
+            view_mode = matrix.get("view_mode") or "portfolio"
+            if view_mode == "executive":
+                focus_col_ids = tuple(matrix.get("focus_columns") or [])
+                if not focus_col_ids:
+                    focus_col_ids = (
+                        "MI300X",
+                        "MI325X",
+                        "MI350P",
+                        "MI350X",
+                        "MI355X",
+                        "EPYC_9965",
+                        "R9700",
+                        "W7900",
+                    )
+                display_cols = [c for c in matrix["columns"] if c in focus_col_ids]
+                for required in ("MI350P", "R9700", "W7900"):
+                    if required not in display_cols and required in (matrix.get("columns_all") or matrix.get("columns") or []):
+                        display_cols.append(required)
+            else:
+                display_cols = list(matrix.get("columns") or [])
 
             row_models = list(matrix.get("display_rows") or [])
             if not row_models:
-                model_best: dict[str, int] = {}
-                for c in matrix["candidates"] + (matrix.get("lifecycle_exclusions") or []):
-                    r = c.get("rank") or 999
-                    model_best[c["model"]] = min(model_best.get(c["model"], 999), r)
-                row_models = sorted(model_best, key=lambda m: model_best[m])[:14]
+                row_models = list(matrix.get("rows") or [])
+
+            row_status = matrix.get("row_status") or {}
+            why_not = matrix.get("why_not_recommended") or {}
+            cc = matrix.get("catalog_counts") or {}
+            catalog_n = cc.get("catalog_models") or len(matrix.get("rows") or [])
+            shown_n = len(row_models)
+            strip = (
+                f"<div style='display:flex;flex-wrap:wrap;gap:0.75rem 1.25rem;margin:0.35rem 0 0.75rem;"
+                f"padding:0.65rem 0.85rem;background:#121212;border:1px solid #2e2e2e;border-radius:0.45rem;"
+                f"font-size:0.78rem;color:#bbb;'>"
+                f"<span><b style='color:#e8e8e8;'>{shown_n}/{catalog_n}</b> catalog</span>"
+                f"<span>suitable <b style='color:#e8e8e8;'>{cc.get('suitable', 0)}</b></span>"
+                f"<span>recommended <b style='color:#8fd400;'>{cc.get('recommended', 0)}</b></span>"
+                f"<span>deployed <b style='color:#e8e8e8;'>{cc.get('deployed', 0)}</b></span>"
+                f"<span>preview/TP <b style='color:#c4a35a;'>{cc.get('preview_tp', 0)}</b></span>"
+                f"<span>lifecycle-excl <b style='color:#888;'>{cc.get('lifecycle_excluded', 0)}</b></span>"
+                f"<span>capability-excl <b style='color:#888;'>{cc.get('capability_excluded', 0)}</b></span>"
+                f"<span style='color:#8fd400;'>{matrix.get('view_label') or view_mode}</span>"
+                f"</div>"
+            )
+            html(strip)
+            if matrix.get("coverage_warning"):
+                st.caption(matrix["coverage_warning"])
 
             def _private_eval(cell: dict) -> bool:
                 if cell.get("availability") == "private-eval":
@@ -1019,11 +1079,11 @@ with tab_matrix:
                 if not cell:
                     return '<span style="color:#444;">—</span>'
                 rec = cell.get("recommendation", "SUPPORTED")
-                rank = cell.get("rank")
                 live = " ●" if cell.get("endpoint_available") else ""
                 aim = cell.get("aim_support", "")
                 life = cell.get("lifecycle", "ga")
                 excluded = cell.get("lifecycle_excluded")
+                cap_excl = cell.get("capability_excluded")
                 pe = _private_eval(cell)
                 mark = cell.get("matrix_mark")
                 life_tag = {
@@ -1031,7 +1091,7 @@ with tab_matrix:
                     "preview": "Preview",
                     "tech-preview": "Tech Preview",
                     "planned": "Planned",
-                }.get(life, life)
+                }.get(life, life or "")
                 if pe:
                     badge = (
                         '<sup title="Available via private eval container '
@@ -1040,6 +1100,14 @@ with tab_matrix:
                     )
                 else:
                     badge = ""
+                if mark == "—" or (cell.get("aim_support") is None and mark in (None, "—")):
+                    return '<span style="color:#444;">—</span>'
+                if cap_excl:
+                    return (
+                        f'<span style="color:#777;" title="Capability mismatch — AIM support exists">'
+                        f"◌{live}{badge}</span><br/>"
+                        f'<span style="color:#555;font-size:0.62rem;">{aim or "aim"} · {life_tag}</span>'
+                    )
                 if excluded and pe:
                     return (
                         f'<span style="color:#888;" title="Available via private eval '
@@ -1051,7 +1119,6 @@ with tab_matrix:
                         f'<span style="color:#555;">⊘</span><br/>'
                         f'<span style="color:#444;font-size:0.62rem;">{life_tag}</span>'
                     )
-                # Prefer engine matrix_mark: ★ / ②③ / ✓ / ○ — number only top ~3–5
                 if mark:
                     color = (
                         "#8fd400"
@@ -1070,23 +1137,40 @@ with tab_matrix:
                     shown = f'<span style="color:#999;">✓{live}{badge}</span>'
                 else:
                     shown = f'<span style="color:#666;">○{live}{badge}</span>'
+                aim_txt = aim if aim is not None else "—"
                 return (
-                    f'{shown}<br/><span style="color:#555;font-size:0.62rem;">{aim} · {life_tag}</span>'
+                    f'{shown}<br/><span style="color:#555;font-size:0.62rem;">{aim_txt} · {life_tag}</span>'
                 )
 
+            status_color = {
+                "recommended": "#8fd400",
+                "suitable": "#dafd95",
+                "supported": "#999",
+                "lifecycle_excluded": "#666",
+                "capability_excluded": "#777",
+                "deployment_excluded": "#666",
+                "metadata_incomplete": "#a66",
+                "no_supported_compute": "#444",
+            }
             header = "".join(
-                f'<th style="padding:0.55rem 0.4rem;color:#999;font-size:0.72rem;font-weight:500;">{c}</th>'
-                for c in focus_cols
+                f'<th style="padding:0.55rem 0.4rem;color:#999;font-size:0.72rem;font-weight:500;'
+                f'position:sticky;top:0;background:#141414;z-index:2;">{c}</th>'
+                for c in display_cols
             )
             body_rows = []
             for model in row_models:
+                status = row_status.get(model, "")
+                sc = status_color.get(status, "#666")
                 tds = "".join(
                     f'<td style="padding:0.55rem 0.4rem;text-align:center;border-top:1px solid #2a2a2a;vertical-align:top;">{cell_label(matrix["cells"].get(model, {}).get(col))}</td>'
-                    for col in focus_cols
+                    for col in display_cols
                 )
                 short = model if len(model) < 36 else model[:33] + "…"
                 body_rows.append(
-                    f'<tr><td style="padding:0.55rem 0.5rem;color:#e8e8e8;font-family:IBM Plex Mono,monospace;font-size:0.75rem;border-top:1px solid #2a2a2a;white-space:nowrap;">{short}</td>{tds}</tr>'
+                    f'<tr><td style="padding:0.55rem 0.5rem;color:#e8e8e8;font-family:IBM Plex Mono,monospace;'
+                    f'font-size:0.75rem;border-top:1px solid #2a2a2a;white-space:nowrap;'
+                    f'position:sticky;left:0;background:#141414;z-index:1;">'
+                    f'{short}<br/><span style="color:{sc};font-size:0.62rem;">{status}</span></td>{tds}</tr>'
                 )
             pe_note = matrix.get("private_eval_note") or (
                 "Preview / Tech Preview cells on MI350P, R9700, and W7900 are available "
@@ -1094,12 +1178,12 @@ with tab_matrix:
             )
             html(
                 f"""
-                <p style="color:#666;font-size:0.78rem;margin:0.5rem 0 0.35rem;">★ Preferred · ② ③ numbered top candidates only · ✓ Acceptable · ○ Supported · ⊘ Lifecycle-excluded · — Not eligible · ● Live · Full rank/score in cell detail</p>
+                <p style="color:#666;font-size:0.78rem;margin:0.5rem 0 0.35rem;">★ Preferred · ② ③ numbered top candidates only · ✓ Acceptable · ○ Supported · ◌ Capability mismatch (AIM exists) · ⊘ Lifecycle-excluded · — No AIM support · ● Live · Full rank/score in cell detail</p>
                 <p style="color:#999;font-size:0.78rem;margin:0 0 0.65rem;"><sup style="color:#c4a35a;">eval</sup> = available via <strong style="color:#bbb;font-weight:500;">private eval container</strong> (Tech Preview / Preview). Under Production these cells stay visible but tagged — not blank — and are not production-eligible. {pe_note}</p>
-                <div style="overflow-x:auto;border:1px solid #333;border-radius:0.5rem;background:#141414;margin:0 0 1rem;">
-                  <table style="border-collapse:collapse;width:100%;min-width:860px;">
+                <div style="overflow:auto;max-height:600px;border:1px solid #333;border-radius:0.5rem;background:#141414;margin:0 0 1rem;">
+                  <table style="border-collapse:collapse;width:100%;min-width:960px;">
                     <thead><tr>
-                      <th style="padding:0.55rem 0.5rem;text-align:left;color:#666;font-size:0.72rem;">MODEL / AIM</th>
+                      <th style="padding:0.55rem 0.5rem;text-align:left;color:#666;font-size:0.72rem;position:sticky;top:0;left:0;background:#141414;z-index:3;">MODEL / AIM</th>
                       {header}
                     </tr></thead>
                     <tbody>{''.join(body_rows)}</tbody>
@@ -1109,23 +1193,45 @@ with tab_matrix:
             )
 
             st.markdown("#### Cell detail / Simulate route")
-            if ranked:
-                pick_labels = [f"#{c.get('rank')} {c['model']} × {c['compute']}" for c in ranked[:12]]
-                pick = st.selectbox("Inspect candidate", pick_labels)
-                detail = ranked[pick_labels.index(pick)]
+            # Inspect any visible model/cell — not only ranked[:12]
+            inspect_options: list[str] = []
+            inspect_cells: list[dict] = []
+            for model in row_models:
+                cols = matrix.get("cells", {}).get(model) or {}
+                for col in display_cols:
+                    cell = cols.get(col)
+                    if not cell:
+                        continue
+                    mark = cell.get("matrix_mark") or "·"
+                    rank = cell.get("rank")
+                    prefix = f"#{rank}" if rank else mark
+                    inspect_options.append(f"{prefix} {model} × {col}")
+                    inspect_cells.append(cell)
+            if not inspect_options and ranked:
+                inspect_options = [f"#{c.get('rank')} {c['model']} × {c['compute']}" for c in ranked[:12]]
+                inspect_cells = list(ranked[:12])
+            if inspect_options:
+                pick = st.selectbox("Inspect candidate", inspect_options)
+                detail = inspect_cells[inspect_options.index(pick)]
+                model_id = detail.get("model")
+                wn = why_not.get(model_id) or []
                 st.json(
                     {
-                        "model": detail["model"],
-                        "compute": detail["compute"],
-                        "recommendation": detail["recommendation"],
-                        "rank": detail["rank"],
+                        "model": detail.get("model"),
+                        "compute": detail.get("compute"),
+                        "row_status": row_status.get(model_id),
+                        "why_not_recommended": wn,
+                        "recommendation": detail.get("recommendation"),
+                        "rank": detail.get("rank"),
                         "score": detail.get("score"),
                         "matrix_mark": detail.get("matrix_mark"),
-                        "aim_support": detail["aim_support"],
+                        "aim_support": detail.get("aim_support"),
                         "lifecycle": detail.get("lifecycle"),
                         "availability": detail.get("availability"),
                         "deployment_channel": detail.get("deployment_channel"),
                         "production_eligible": detail.get("production_eligible"),
+                        "capability_excluded": detail.get("capability_excluded"),
+                        "lifecycle_excluded": detail.get("lifecycle_excluded"),
                         "capability_fit": detail.get("capability_fit"),
                         "performance_fit": detail.get("performance_fit"),
                         "economic_fit": detail.get("economic_fit"),
@@ -1134,14 +1240,14 @@ with tab_matrix:
                         "serving_pattern_fit": detail.get("serving_pattern_fit"),
                         "locality_fit": detail.get("locality_fit"),
                         "preference_label": detail.get("preference_label"),
-                        "confidence": detail["confidence"],
-                        "cost_confidence": detail["cost_confidence"],
+                        "confidence": detail.get("confidence"),
+                        "cost_confidence": detail.get("cost_confidence"),
                         "cost_evidence": detail.get("cost_evidence"),
                         "infrastructure_cost_class": detail.get("infrastructure_cost_class")
                         or detail.get("hardware_cost_class"),
                         "token_economic_fit": detail.get("token_economic_fit"),
-                        "relative_cost_class": detail["relative_cost_class"],
-                        "endpoint_available": detail["endpoint_available"],
+                        "relative_cost_class": detail.get("relative_cost_class"),
+                        "endpoint_available": detail.get("endpoint_available"),
                         "endpoint_id": detail.get("endpoint_id"),
                         "why": detail.get("reasons"),
                         "private_eval_note": (
@@ -1152,6 +1258,8 @@ with tab_matrix:
                         ),
                     }
                 )
+                if wn and row_status.get(model_id) != "recommended":
+                    st.caption("Why not recommended: " + " · ".join(wn[:3]))
 
             if st.button("Simulate runtime route"):
                 sim = engine.simulate_route(

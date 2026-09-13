@@ -234,7 +234,7 @@ def test_matrix_mi350p_column_shows_tech_preview():
     found = False
     for model, cols in matrix["cells"].items():
         cell = cols.get("MI350P")
-        if cell:
+        if cell and cell.get("aim_support") is not None:
             assert cell["lifecycle"] == "tech-preview"
             found = True
     assert found
@@ -517,12 +517,12 @@ def test_matrix_private_eval_mi350p_r9700_nonempty_under_evaluation():
         mi_cells = [
             (m, cols["MI350P"])
             for m, cols in matrix["cells"].items()
-            if cols.get("MI350P")
+            if cols.get("MI350P") and cols["MI350P"].get("aim_support") is not None
         ]
         r9_cells = [
             (m, cols["R9700"])
             for m, cols in matrix["cells"].items()
-            if cols.get("R9700")
+            if cols.get("R9700") and cols["R9700"].get("aim_support") is not None
         ]
         assert mi_cells, f"{uc}: expected MI350P private-eval cells"
         assert r9_cells, f"{uc}: expected R9700 private-eval cells (enterprise must not blank column)"
@@ -556,20 +556,28 @@ def test_matrix_private_eval_visible_tagged_under_production():
     mi_cells = [
         cols["MI350P"]
         for cols in matrix["cells"].values()
-        if cols.get("MI350P")
+        if cols.get("MI350P") and cols["MI350P"].get("aim_support") is not None
     ]
     r9_cells = [
         cols["R9700"]
         for cols in matrix["cells"].values()
-        if cols.get("R9700")
+        if cols.get("R9700") and cols["R9700"].get("aim_support") is not None
     ]
     assert mi_cells, "MI350P column must not be empty under Production"
     assert r9_cells, "R9700 column must not be empty under Production"
     assert all(c.get("lifecycle_excluded") for c in mi_cells)
     assert all(c.get("lifecycle_excluded") for c in r9_cells)
     assert all(c.get("availability") == "private-eval" for c in mi_cells + r9_cells)
-    assert any(m in matrix["display_rows"] for m, cols in matrix["cells"].items() if cols.get("MI350P"))
-    assert any(m in matrix["display_rows"] for m, cols in matrix["cells"].items() if cols.get("R9700"))
+    assert any(
+        m in matrix["display_rows"]
+        for m, cols in matrix["cells"].items()
+        if cols.get("MI350P") and cols["MI350P"].get("aim_support") is not None
+    )
+    assert any(
+        m in matrix["display_rows"]
+        for m, cols in matrix["cells"].items()
+        if cols.get("R9700") and cols["R9700"].get("aim_support") is not None
+    )
     assert "private eval" in (matrix.get("private_eval_note") or "").lower()
 
 

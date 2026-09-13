@@ -16,7 +16,8 @@ COMPILED ROUTES        = ACTIVE EXECUTION
 | Inventory | Is an endpoint live now? | `config/endpoints.yaml` |
 | Compiled routes | What will Semantic Router actually select? | Profile overlay routes → generated SR/AIGW |
 
-The **Routing Matrix** is a scenario projection of the canonical policy.
+The **Routing Matrix** is a scenario projection of the canonical policy
+(**Portfolio Matrix** = full AIM catalog rows; **Executive View** = labeled truncation).
 The **Policies** tab is the human-readable representation of the same policy.
 `token-factory recommend` / `policy explain` / simulation all call `RecommendationEngine`.
 
@@ -71,14 +72,19 @@ token-factory policy coverage
 token-factory policy compile --profile amd-balanced
 token-factory policy export -o /tmp/policy.json
 token-factory policy diff --left amd-balanced --right amd-enterprise
+
+# AIM catalog / Portfolio coverage (orthogonal to policy overlays)
+token-factory catalog audit
+token-factory matrix audit -u coding-assistant --view portfolio
 ```
 
 ## Engine
 
-`src/token_factory/routing_matrix/engine.py` consumes the canonical policy document (flat engine keys + nested metadata). Explain Policy (`src/token_factory/policy/explain.py`) wraps the same engine for seven-step UI/CLI output.
+`src/token_factory/routing_matrix/engine.py` consumes the canonical policy document (flat engine keys + nested metadata). Explain Policy (`src/token_factory/policy/explain.py`) wraps the same engine for seven-step UI/CLI output. Portfolio helpers live in `routing_matrix/portfolio.py`.
 
 ## Related docs
 
-- [amd-routing-matrix.md](amd-routing-matrix.md) — Matrix UX and lifecycle
-- [routing-policy.md](routing-policy.md) — V1 SR profile packs
-- [routing-economics.md](routing-economics.md) — relative cost language (no fabricated $/token)
+- [AMD Routing Matrix](amd-routing-matrix.md) — Portfolio / Executive Matrix UX and lifecycle
+- [AIM catalog](aim-catalog.md) — CAN RUN merge, audit soft gaps
+- [Routing economics](routing-economics.md) — relative cost language (no fabricated $/token)
+- [Routing policies (V1)](routing-policy.md) — V1 SR profile packs

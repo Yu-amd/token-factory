@@ -352,6 +352,103 @@ def catalog_update(
     console.print(f"Updated catalog metadata at {path}")
 
 
+catalog_app = typer.Typer(help="AIM catalog inspection / audit")
+app.add_typer(catalog_app, name="catalog")
+
+
+@catalog_app.command("audit")
+def catalog_audit(
+    json_out: bool = typer.Option(False, "--json", help="Machine-readable JSON"),
+) -> None:
+    """Audit merged AIM catalog counts and soft gaps vs pinned AMD docs snapshot."""
+    from token_factory.routing_matrix import audit_catalog
+
+    result = audit_catalog()
+    if json_out:
+        console.print_json(data=result)
+        return
+    console.print(
+        Panel.fit(
+            f"[bold]AIM Catalog Audit[/bold]\n"
+            f"GA aims.yaml          {result['ga_aims']}\n"
+            f"MI350P Tech Preview   {result['tech_preview_mi350p_models']}\n"
+            f"Merged catalog        {result['merged_catalog_models']}\n"
+            f"models.yaml           {result['models_yaml']}\n"
+            f"Compute columns       {result['compute_columns']}\n"
+            f"Aliases               {result['aliases']}\n"
+            f"AMD docs (pinned)     {result['amd_docs_url']}\n"
+            f"Reconcile             snapshot only — no runtime scrape"
+        )
+    )
+    table = Table(title="Vendors")
+    table.add_column("Vendor")
+    table.add_column("Models", justify="right")
+    for vendor, n in (result.get("vendors") or {}).items():
+        table.add_row(vendor, str(n))
+    console.print(table)
+    gaps = result.get("soft_gaps") or []
+    if gaps:
+        console.print("\n[bold yellow]Soft gaps[/bold yellow]")
+        for g in gaps:
+            models = g.get("models") or []
+            console.print(f"  • {g.get('kind')}: {g.get('note')}")
+            for m in models[:12]:
+                console.print(f"      - {m}")
+            if len(models) > 12:
+                console.print(f"      … +{len(models) - 12} more")
+    else:
+        console.print("\n[green]No soft gaps recorded.[/green]")
+
+
+matrix_app = typer.Typer(help="Portfolio / Executive matrix commands")
+app.add_typer(matrix_app, name="matrix")
+
+
+@matrix_app.command("audit")
+def matrix_audit(
+    use_case: str = typer.Option(
+        "coding-assistant", "--use-case", "-u", help="Use-case id"
+    ),
+    view_mode: str = typer.Option(
+        "portfolio", "--view", help="portfolio|executive"
+    ),
+    show: str = typer.Option("all", "--show", help="all|suitable|recommended|deployed|preview-tp"),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """Audit Portfolio/Executive matrix coverage (real row/column counts)."""
+    from token_factory.routing_matrix import audit_matrix
+
+    result = audit_matrix(use_case, view_mode=view_mode, show=show)
+    if json_out:
+        console.print_json(data=result)
+        return
+    cc = result.get("catalog_counts") or {}
+    console.print(
+        Panel.fit(
+            f"[bold]Matrix Audit · {result.get('view_mode')}[/bold]\n"
+            f"Use case       {result['use_case']}\n"
+            f"Catalog models {result['catalog_models']}\n"
+            f"rows           {result['rows']} (full catalog)\n"
+            f"display_rows   {result['display_rows']}\n"
+            f"Columns        {', '.join(result.get('columns') or [])}\n"
+            f"AIM cells      {result.get('cells_with_aim_support')}\n"
+            f"Dash (—) cells {result.get('cells_dash_no_support')}\n"
+            f"Suitable       {cc.get('suitable')} · Recommended {cc.get('recommended')} · "
+            f"Deployed {cc.get('deployed')} · Preview/TP {cc.get('preview_tp')}"
+        )
+    )
+    if result.get("coverage_warning"):
+        console.print(f"[yellow]{result['coverage_warning']}[/yellow]")
+    statuses = result.get("row_status_counts") or {}
+    if statuses:
+        table = Table(title="Row status")
+        table.add_column("Status")
+        table.add_column("Count", justify="right")
+        for status, n in statuses.items():
+            table.add_row(status, str(n))
+        console.print(table)
+
+
 @app.command()
 def recommend(
     use_case: str | None = typer.Option(

@@ -143,11 +143,31 @@ Cards do **not** relabel one global ranking:
 ## Matrix marks
 
 User-facing cells number only the top ~3–5 candidates:
-★ Preferred · ② ③ · ✓ Acceptable · ○ Supported · ⊘ Lifecycle-excluded · — Not eligible · ● Live.
+★ Preferred · ② ③ · ✓ Acceptable · ○ Supported · ◌ Capability mismatch (AIM exists) ·
+⊘ Lifecycle-excluded · — **No AIM support** · ● Live.
 Raw score and full rank stay in cell detail JSON.
 
 In the Streamlit Matrix tab the mark legend and private-eval note sit **above** the
 table (not below), so marks are readable before scrolling the grid.
+
+## Portfolio Matrix vs Executive View
+
+| Mode | Rows | Truncation |
+|------|------|------------|
+| **Portfolio Matrix** (default) | Full merged AIM catalog (`aims.yaml` ∪ tech-preview after aliases) | **None** silent. `display_rows` shrinks only via explicit Show / search / vendor filters. |
+| **Executive View** | Same `rows` universe | May truncate `display_rows` to top-ranked ∪ strategic ∪ private-eval ∪ deployed; labeled + coverage warning. |
+
+Payload fields:
+
+- `rows` — full catalog model ids
+- `display_rows` — after explicit filters / Executive truncation
+- `row_status` — `recommended` \| `suitable` \| `supported` \| `capability_excluded` \| `lifecycle_excluded` \| `deployment_excluded` \| `no_supported_compute` \| `metadata_incomplete`
+- `cells` — dense model × compute grid (`—` only when AIM support is absent)
+- `catalog_counts` / `compute_counts` / `view_mode` / `coverage_warning`
+- `why_not_recommended` — per-model reasons when not recommended
+
+Compute columns include the full compute catalog (MI250X, EPYC_ZEN4/5, …) with UI group
+toggle All \| Instinct \| EPYC \| Radeon. Focus columns are for ordering / Executive density only.
 
 ## Ranking
 
@@ -184,6 +204,11 @@ token-factory recommend --compute MI350P -u coding-assistant
 token-factory recommend --compute R9700 -u simple-chat -o edge-local
 
 token-factory recommend -u coding-assistant --simulate -L production
+
+# Catalog / Portfolio coverage (real counts; no AMD docs scrape)
+token-factory catalog audit
+token-factory matrix audit -u coding-assistant --view portfolio
+token-factory matrix audit -u coding-assistant --view executive
 ```
 
 ## UI
@@ -192,18 +217,21 @@ Streamlit tab **AMD Routing Matrix** (`make ui` → tab) **starts at the control
 (no Matrix hero blurb). Deep policy narrative is on the **Policies** tab
 ([policy-model.md](policy-model.md) / `policies/amd-policy.yaml` v2.3).
 
-- Controls: Use Case, Objective, Deployment, Lifecycle, Serving Pattern, Traffic, Data Locality, Show, I Have Compute
-- Summary cards: distinct selectors — **BEST PERFORMANCE** | **BEST BALANCE** | **LOWEST-COST SUFFICIENT** (+ **BEST BATCH** / **BEST LOCAL** when relevant)
-- Columns: MI300X · MI325X · **MI350P** · MI350X · MI355X · EPYC · R9700 · W7900 (always retained)
-- Rows: top ranked for the objective **∪** any model with a Preview / Tech Preview cell on MI350P / R9700 / W7900 (so those columns are not empty shells)
-- **Legend + private-eval note above the table** (marks and `eval` explanation before the grid)
-- Cell tags: GA / Preview / Tech Preview
-- **Private-eval superscript** (`<sup>eval</sup>`): Preview / Tech Preview AIM cells are shown as available via **private eval containers** (not silent production GA). Under Lifecycle=Production they stay **visible but tagged** (grey ○ + `eval`), not blank `—`, and remain non–production-eligible. Under Evaluation they show rank marks plus the same badge.
-- Cell detail JSON includes `availability: private-eval` / `deployment_channel: private-eval-container` when applicable
+- **View**: Portfolio Matrix (full catalog) \| Executive View (truncated)
+- Controls: Use Case, Objective, Deployment, Lifecycle, Serving Pattern, Traffic, Data Locality, Show, Compute columns (All\|Instinct\|EPYC\|Radeon), Search, Vendor, I Have Compute
+- Show: All AIMs \| Suitable \| Recommended \| Deployed \| Preview/TP
+- Coverage strip: shown/catalog, suitable, recommended, deployed, preview/TP, exclusions
+- Summary cards: distinct selectors — **BEST PERFORMANCE** \| **BEST BALANCE** \| **LOWEST-COST SUFFICIENT** (+ **BEST BATCH** / **BEST LOCAL** when relevant)
+- Columns: full compute catalog by default (MI250X … MI355X · EPYC · Radeon); sticky header + sticky model column; internal scroll ~600px
+- Rows: Portfolio = full catalog (ordered by row_status); Executive = truncated set with explicit label
+- **Legend + private-eval note above the table**
+- Cell tags: GA / Preview / Tech Preview; ◌ = capability mismatch (not `—`)
+- Inspect any visible model/cell (not only ranked[:12]); **why not recommended** in detail
 - Simulate route explains MI350P / Radeon lifecycle exclusions
 
 ## Related docs
 
+- [AIM catalog](aim-catalog.md)
 - [Routing economics](routing-economics.md)
 - [Routing policies (V1)](routing-policy.md)
 - [AIM / compute guide](amd-compute-guide.md)

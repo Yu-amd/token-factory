@@ -15,7 +15,22 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from token_factory.catalog.eligibility import SUPPORT_RANK
-from token_factory.routing_matrix.loader import load_routing_bundle, normalize_model_id
+from token_factory.routing_matrix.loader import load_routing_bundle
+from token_factory.routing_matrix.portfolio import (
+    EXECUTIVE_TOP_ROWS,
+    capability_cell_from_aim,
+    catalog_counts as build_catalog_counts,
+    catalog_model_ids,
+    classify_row_status,
+    compute_counts as build_compute_counts,
+    executive_display_rows,
+    filter_columns,
+    filter_display_rows,
+    metadata_incomplete,
+    order_portfolio_rows,
+    unsupported_cell,
+    why_not_recommended,
+)
 
 LEVEL_ORDER = {
     "PREFERRED": 5,
@@ -49,11 +64,12 @@ SIZE_TIER = {
 TIER_NAME = {"basic": 1, "standard": 2, "high": 3, "frontier": 4}
 
 # Matrix focus columns for private-eval (Tech Preview / Preview) AIM cells.
-# Always retained in UI columns; models with cells here are unioned into display rows.
+# Always retained in UI columns; Executive view unions these into its truncated set.
 PRIVATE_EVAL_COMPUTES = ("MI350P", "R9700", "W7900")
 PRIVATE_EVAL_AVAILABILITY = "private-eval"
 PRIVATE_EVAL_CHANNEL = "private-eval-container"
-MATRIX_TOP_ROWS = 14
+# Executive-only truncation budget (Portfolio never silently truncates).
+MATRIX_TOP_ROWS = EXECUTIVE_TOP_ROWS
 
 # Soft generation bias for balanced — small deltas, NOT primary rank key
 INSTINCT_GEN_BIAS = {
@@ -1267,30 +1283,46 @@ class RecommendationEngine:
         deployment: str | None = None,
         utilization: str = "medium",
         endpoints: list[dict[str, Any]] | None = None,
-        show: str = "recommended+supported",
+        show: str = "all",
         lifecycle_mode: str | None = "production",
         data_locality: bool = False,
         include_excluded: bool = True,
         serving_pattern: str | None = None,
         latency_requirement: str | None = None,
+        view_mode: str = "portfolio",
+        search: str | None = None,
+        vendor: str | None = None,
+        compute_group: str | None = "all",
     ) -> dict[str, Any]:
+        """Build AIM Portfolio Matrix (default) or Executive View.
+
+        Portfolio: ``rows`` = full merged AIM catalog; ``display_rows`` only after
+        explicit Show/search/vendor filters (never silent top-N truncation).
+        Executive: may truncate to top-ranked ∪ strategic ∪ private-eval ∪ deployed.
+        """
+        view_mode = (view_mode or "portfolio").lower()
+        if view_mode not in ("portfolio", "executive"):
+            view_mode = "portfolio"
+
+        # Scoring/ranking still selective — capability filter applies to recommend().
         result = self.recommend(
             use_case_id,
             objective=objective,
             deployment=deployment,
             utilization=utilization,
             endpoints=endpoints,
-            show=show,
+            show="all",
             lifecycle_mode=lifecycle_mode,
             data_locality=data_locality,
             include_excluded=include_excluded,
             serving_pattern=serving_pattern,
             latency_requirement=latency_requirement,
         )
-        # Drop internal pool from public matrix payload
-        pool = result.pop("_pool", None)
-        # Column order: Instinct (MI300X MI325X MI350P MI350X MI355X) + EPYC + Radeon
+        result.pop("_pool", None)
+
+        # Full compute catalog columns (group toggle filters display only).
         preferred_order = [
+            "MI250X",
             "MI300X",
             "MI325X",
             "MI350P",
@@ -1301,24 +1333,21 @@ class RecommendationEngine:
             "EPYC_ZEN5",
             "R9700",
             "W7900",
-            "MI250X",
         ]
         all_cols = [c["id"] for c in self.bundle["compute"].get("compute", [])]
-        columns = [c for c in preferred_order if c in all_cols]
-        columns += [c for c in all_cols if c not in columns]
-        # Always retain private-eval focus columns even if compute catalog order drifts
+        columns_all = [c for c in preferred_order if c in all_cols]
+        columns_all += [c for c in all_cols if c not in columns_all]
         for focus in PRIVATE_EVAL_COMPUTES:
-            if focus in all_cols and focus not in columns:
-                columns.append(focus)
+            if focus in all_cols and focus not in columns_all:
+                columns_all.append(focus)
+        columns = filter_columns(columns_all, self.compute, compute_group)
 
-        # Include excluded cells in matrix for greyed / tagged display
         cell_sources = list(result["candidates"])
         if include_excluded:
             cell_sources = cell_sources + list(result.get("lifecycle_exclusions") or [])
 
-        # Private-eval enrichment: MI350P / Radeon Preview cells must appear in the
-        # matrix even when Deployment=enterprise filters workstation Radeon out of
-        # recommend(). Does not change production eligibility of ranked routes.
+        # Private-eval enrichment: MI350P / Radeon Preview cells stay visible even
+        # when Deployment=enterprise filters workstation Radeon out of recommend().
         pe_result = self.recommend(
             use_case_id,
             objective=objective,
@@ -1351,10 +1380,6 @@ class RecommendationEngine:
             c["deployment_channel"] = (
                 c.get("deployment_channel") or PRIVATE_EVAL_CHANNEL
             )
-            # Keep lifecycle_excluded only when the lifecycle mode forbids the cell.
-            # Deployment=enterprise must not blank Radeon private-eval columns:
-            # under Evaluation they remain ranked+tagged; under Production they
-            # stay visible as tagged private-eval (not production-eligible).
             if not c.get("lifecycle_excluded"):
                 reasons = list(c.get("reasons") or [])
                 note = (
@@ -1369,34 +1394,213 @@ class RecommendationEngine:
             private_eval_added.append(c)
             existing_keys.add(key)
 
-        models = sorted({c["model"] for c in cell_sources})
-        cells: dict[str, dict[str, Any]] = {m: {} for m in models}
+        scored: dict[tuple[str, str], dict[str, Any]] = {}
         for c in cell_sources:
-            cells[c["model"]][c["compute"]] = c
+            scored[(c["model"], c["compute"])] = c
 
-        # Display rows: top ranked for objective ∪ any model with a private-eval
-        # focus cell (so MI350P / R9700 / W7900 columns are not empty shells).
-        model_best: dict[str, int] = {}
-        for c in cell_sources:
-            r = c.get("rank")
-            model_best[c["model"]] = min(
-                model_best.get(c["model"], 999), r if r is not None else 999
+        use_case = self.use_cases[use_case_id]
+        catalog_models = catalog_model_ids(self.bundle)
+        family_of = {cid: (self.compute.get(cid) or {}).get("family", "") for cid in columns_all}
+
+        ep_index: dict[tuple[str, str], dict[str, Any]] = {}
+        for ep in endpoints or []:
+            if not ep.get("enabled", True):
+                continue
+            ep_index[(ep.get("model", ""), ep.get("accelerator", ""))] = ep
+
+        cells: dict[str, dict[str, Any]] = {}
+        capability_why: dict[str, str] = {}
+        capability_ok_map: dict[str, bool] = {}
+        row_status: dict[str, str] = {}
+        why_not: dict[str, list[str]] = {}
+
+        for model in catalog_models:
+            ok, why = self._capability_ok(model, use_case)
+            capability_ok_map[model] = ok
+            capability_why[model] = why if not ok else ""
+            meta_bad = metadata_incomplete(self, model)
+            row_cells: dict[str, Any] = {}
+
+            aim_cells = {
+                (fam, cid): (sup, life)
+                for fam, cid, sup, life in self._aim_cells(model)
+            }
+
+            for compute_id in columns_all:
+                family = family_of.get(compute_id) or (
+                    self.compute.get(compute_id) or {}
+                ).get("family", "")
+                key = (model, compute_id)
+                if key in scored:
+                    cell = dict(scored[key])
+                    if not ok:
+                        cell["capability_excluded"] = True
+                        if cell.get("matrix_mark") in (None, "—"):
+                            cell["matrix_mark"] = "◌"
+                        reasons = list(cell.get("reasons") or [])
+                        note = f"capability_excluded: {why}"
+                        if note not in reasons:
+                            reasons.insert(0, note)
+                            cell["reasons"] = reasons
+                            cell["why"] = reasons
+                    row_cells[compute_id] = cell
+                    continue
+
+                aim = aim_cells.get((family, compute_id))
+                if aim is None:
+                    # Try any family entry for this compute id
+                    aim = next(
+                        (v for (f, cid), v in aim_cells.items() if cid == compute_id),
+                        None,
+                    )
+                if aim is None:
+                    row_cells[compute_id] = unsupported_cell(
+                        model, compute_id, family or "unknown"
+                    )
+                    continue
+
+                aim_support, lifecycle = aim
+                availability = None
+                deployment_channel = None
+                if lifecycle in ("preview", "tech-preview"):
+                    availability = PRIVATE_EVAL_AVAILABILITY
+                    deployment_channel = PRIVATE_EVAL_CHANNEL
+
+                if not ok or meta_bad:
+                    cell = capability_cell_from_aim(
+                        model=model,
+                        compute_id=compute_id,
+                        family=family or "unknown",
+                        aim_support=aim_support,
+                        lifecycle=lifecycle,
+                        capability_why=why if not ok else "metadata_incomplete",
+                        availability=availability,
+                        deployment_channel=deployment_channel,
+                    )
+                else:
+                    # AIM support exists but recommend() skipped (e.g. deployment filter).
+                    allowed = self._allowed_lifecycles(
+                        self.resolve_lifecycle_mode(lifecycle_mode)
+                    )
+                    life_excl = lifecycle not in allowed
+                    level = self._base_level(aim_support, lifecycle)
+                    reasons = [
+                        f"AIM support={aim_support}",
+                        "visible in Portfolio; not in current recommend() filter set",
+                    ]
+                    if deployment:
+                        reasons.append(
+                            f"deployment filter '{deployment}' may exclude from ranked candidates"
+                        )
+                    cell = {
+                        "model": model,
+                        "compute": compute_id,
+                        "family": family or "unknown",
+                        "aim_support": aim_support,
+                        "lifecycle": lifecycle,
+                        "recommendation": level,
+                        "rank": None,
+                        "score": 0.0,
+                        "confidence": "medium",
+                        "reasons": reasons,
+                        "why": reasons,
+                        "endpoint_available": False,
+                        "endpoint_id": None,
+                        "lifecycle_excluded": life_excl,
+                        "capability_excluded": False,
+                        "matrix_mark": "⊘" if life_excl else "○",
+                        "production_eligible": lifecycle == "ga",
+                        "availability": availability,
+                        "deployment_channel": deployment_channel,
+                        "exclusion_kind": "lifecycle" if life_excl else "deployment",
+                        "exclusion_reason": (
+                            f"lifecycle '{lifecycle}' excluded by mode "
+                            f"'{self.resolve_lifecycle_mode(lifecycle_mode)}'"
+                            if life_excl
+                            else f"deployment filter '{deployment}'"
+                        ),
+                    }
+                ep = ep_index.get((model, compute_id))
+                if ep:
+                    cell["endpoint_available"] = True
+                    cell["endpoint_id"] = ep.get("id")
+                row_cells[compute_id] = cell
+
+            cells[model] = row_cells
+            status = classify_row_status(
+                model=model,
+                cells=row_cells,
+                capability_ok=ok and not meta_bad,
+                meta_incomplete=meta_bad,
+                deployment_filter=deployment,
+                compute_meta=self.compute,
             )
-        top_models = sorted(model_best, key=lambda m: model_best[m])[:MATRIX_TOP_ROWS]
-        focus_models: list[str] = []
-        for model, cols in cells.items():
-            for focus in PRIVATE_EVAL_COMPUTES:
-                cell = cols.get(focus)
-                if cell and cell.get("lifecycle") in ("preview", "tech-preview"):
-                    focus_models.append(model)
-                    break
-        focus_models.sort(key=lambda m: (model_best.get(m, 999), m))
-        display_rows: list[str] = []
-        seen: set[str] = set()
-        for m in top_models + focus_models:
-            if m not in seen:
-                display_rows.append(m)
-                seen.add(m)
+            row_status[model] = status
+            why_not[model] = why_not_recommended(
+                model,
+                row_status=status,
+                cells=row_cells,
+                capability_why=capability_why.get(model) or None,
+            )
+
+        ordered = order_portfolio_rows(catalog_models, row_status, cells)
+        filtered = filter_display_rows(
+            ordered,
+            row_status=row_status,
+            cells=cells,
+            show=show,
+            search=search,
+            vendor=vendor,
+        )
+
+        if view_mode == "executive":
+            uc = self.use_cases.get(use_case_id) or {}
+            strategic = list(uc.get("preferred_models") or [])
+            display_rows = executive_display_rows(
+                filtered,
+                cells=cells,
+                row_status=row_status,
+                strategic_models=strategic,
+                limit=MATRIX_TOP_ROWS,
+            )
+            view_label = "Executive View (truncated)"
+        else:
+            display_rows = filtered
+            view_label = "Portfolio Matrix (full catalog)"
+
+        counts = build_catalog_counts(
+            catalog_models=catalog_models,
+            row_status=row_status,
+            cells=cells,
+            display_rows=display_rows,
+        )
+        coverage_warning = None
+        if len(display_rows) < len(catalog_models):
+            coverage_warning = (
+                f"Showing {len(display_rows)} of {len(catalog_models)} catalog models "
+                f"({view_label}). Filters or Executive truncation applied — "
+                "not a silent catalog omission."
+            )
+
+        # Backward-compat candidates: honor original show semantics on scored set
+        show_norm = (show or "all").lower()
+        if show_norm in ("recommended", "recommended-only"):
+            candidates = [
+                c
+                for c in result["candidates"]
+                if c["recommendation"] in ("PREFERRED", "RECOMMENDED")
+            ]
+        elif show_norm in ("deployed", "deployed-only"):
+            candidates = [c for c in result["candidates"] if c.get("endpoint_available")]
+        elif show_norm in ("all", "all-aims"):
+            candidates = list(result["candidates"])
+        else:
+            candidates = [
+                c
+                for c in result["candidates"]
+                if c["recommendation"]
+                in ("PREFERRED", "RECOMMENDED", "ACCEPTABLE", "SUPPORTED")
+            ]
 
         summaries = self.summary_cards(
             use_case_id,
@@ -1410,11 +1614,21 @@ class RecommendationEngine:
         )
         return {
             **{k: result[k] for k in result if k not in ("candidates", "_pool")},
+            "view_mode": view_mode,
+            "view_label": view_label,
             "columns": columns,
-            "rows": models,
+            "columns_all": columns_all,
+            "focus_columns": [c for c in columns_all if c in (
+                "MI300X", "MI325X", "MI350P", "MI350X", "MI355X",
+                "EPYC_9965", "R9700", "W7900",
+            )],
+            "compute_group": compute_group or "all",
+            "rows": list(catalog_models),
             "display_rows": display_rows,
+            "row_status": row_status,
+            "why_not_recommended": why_not,
             "cells": cells,
-            "candidates": result["candidates"],
+            "candidates": candidates,
             "ranked": result["ranked"],
             "summary_cards": summaries["cards"],
             "lifecycle_exclusions": result.get("lifecycle_exclusions") or [],
@@ -1423,6 +1637,12 @@ class RecommendationEngine:
                 "Preview / Tech Preview AIM cells on MI350P, R9700, and W7900 are "
                 "available via private eval containers (not silent production GA)."
             ),
+            "catalog_counts": counts,
+            "compute_counts": build_compute_counts(columns, self.compute),
+            "coverage_warning": coverage_warning,
+            "show": show,
+            "search": search,
+            "vendor": vendor,
         }
 
     def recommend_for_compute(
