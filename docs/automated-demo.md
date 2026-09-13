@@ -128,6 +128,6 @@ Demo-only overlay (never mutates canonical policy or on-disk endpoints):
 
 ## Safety
 
-- Max requests per run: **100**
+- Max requests per run: **8000**
 - Max concurrency: **10**
 - Not a stress-testing or benchmark platform

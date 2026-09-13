@@ -90,7 +90,7 @@ def render_automated_demo_tab(
     with r1:
         seed = st.number_input("Seed (mixed packs)", min_value=0, value=42, step=1)
     with r2:
-        req_limit = st.number_input("Max requests", min_value=1, max_value=100, value=40, step=1)
+        req_limit = st.number_input("Max requests", min_value=1, max_value=8000, value=40, step=1)
     with r3:
         force_mock = st.checkbox(
             "Use mock adapters (no cluster)",

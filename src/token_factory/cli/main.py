@@ -968,7 +968,7 @@ def demo_run_cmd(
     traffic: str = typer.Option(
         "sequential", "--traffic", "-t", help="sequential|low|medium|high|mixed"
     ),
-    requests: int | None = typer.Option(None, "--requests", help="Max requests (≤100)"),
+    requests: int | None = typer.Option(None, "--requests", help="Max requests (≤8000)"),
     concurrency: int | None = typer.Option(
         None, "--concurrency", "-c", help="Bounded concurrency (≤10)"
     ),

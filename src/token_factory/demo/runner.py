@@ -28,7 +28,7 @@ from token_factory.demo.persist import persist_run
 from token_factory.demo.validation import validate_request
 from token_factory.routing_matrix import RecommendationEngine
 
-MAX_REQUESTS = 100
+MAX_REQUESTS = 8000
 MAX_CONCURRENCY = 10
 
 TRAFFIC_CONCURRENCY = {

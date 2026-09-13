@@ -62,7 +62,7 @@ def load_pack(pack_id: str, *, path: Path | None = None) -> dict[str, Any]:
 def expand_requests(
     pack: dict[str, Any],
     *,
-    max_requests: int = 100,
+    max_requests: int = 8000,
     seed: int | None = None,
 ) -> list[dict[str, Any]]:
     """Expand pack scenarios into concrete request specs (deterministic).
