@@ -32,8 +32,8 @@ Other tabs (Matrix, Policies, …) keep normal page scroll.
 |--------|------|
 | Compact header | Title + virtual model + preferred stream path |
 | Health strip | ● Gateway · SR API · SR Dashboard · Grafana · Prometheus (live probes) |
-| Live flow (~80–110px) | CLIENT → ENVOY AI GATEWAY → vLLM SEMANTIC ROUTER → AMD POLICY → AIM / AMD COMPUTE |
-| Conversation (~70%) | Chat history + sample prompts |
+| Live flow (~72–92px) | CLIENT → ENVOY AI GATEWAY → vLLM SEMANTIC ROUTER → AMD POLICY → AIM / AMD COMPUTE |
+| Conversation (~70%) | Chat history + sample prompts (`calc(100vh − chrome)` scroll pane) |
 | Route Inspector (~30%) | Mini-tabs: **Decision** · **Policy** · **Metrics** (+ Grafana / SR Dashboard links) |
 
 Flow node states (`idle` / `active` / `complete` / `warning` / `failed`) and connector animation are driven by **real request stages** (classify → resolve → first content token → complete), not fake progress timers. TTFT is measured from stream open to the first content token.

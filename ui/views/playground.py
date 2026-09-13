@@ -45,12 +45,17 @@ SAMPLE_PROMPTS = (
 PLAYGROUND_CSS = """
 <style>
 /* ---- Playground-only shell (does not affect Matrix/Policies scroll) ---- */
+:root {
+  /* Overhead above+below conversation pane (chrome, tabs, health, flow, samples, composer). */
+  --tf-pg-chrome: 600px;
+  --tf-pg-samples: 48px;
+}
 .tf-pg-header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.1rem 0 0.2rem;
+  padding: 0 0 0.1rem;
 }
 .tf-pg-header h2 {
   margin: 0;
@@ -69,13 +74,13 @@ PLAYGROUND_CSS = """
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem 0.85rem;
-  padding: 0.35rem 0.65rem;
+  padding: 0.25rem 0.55rem;
   background: var(--tf-surface);
   border: 1px solid var(--tf-border);
   border-radius: 0.4rem;
   font-size: 0.72rem;
   font-family: "IBM Plex Mono", ui-monospace, monospace;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.2rem;
 }
 .tf-pg-health-item {
   display: inline-flex;
@@ -100,10 +105,10 @@ PLAYGROUND_CSS = """
   background: #0d0d0d;
   border: 1px solid var(--tf-border);
   border-radius: 0.45rem;
-  padding: 0.45rem 0.65rem 0.5rem;
-  min-height: 88px;
-  max-height: 110px;
-  margin-bottom: 0.35rem;
+  padding: 0.3rem 0.55rem 0.35rem;
+  min-height: 72px;
+  max-height: 92px;
+  margin-bottom: 0.2rem;
 }
 .tf-pg-flow-meta {
   display: flex;
@@ -156,7 +161,7 @@ PLAYGROUND_CSS = """
   display: flex;
   align-items: stretch;
   gap: 0.2rem;
-  min-height: 52px;
+  min-height: 42px;
 }
 .tf-pg-node {
   flex: 1 1 0;
@@ -303,7 +308,7 @@ PLAYGROUND_CSS = """
   font-size: 0.72rem !important;
 }
 .tf-pg-empty {
-  padding: 1.25rem 0.75rem;
+  padding: 0.75rem 0.65rem;
   text-align: center;
   color: var(--tf-muted);
   font-size: 0.85rem;
@@ -313,10 +318,40 @@ PLAYGROUND_CSS = """
   background: rgba(255,255,255,0.015);
 }
 .tf-pg-empty strong { color: var(--tf-text); font-weight: 600; }
+.tf-pg-pane-chat, .tf-pg-pane-insp { display: none; }
 
-/* Playground tab panel: constrain vertical footprint; other tabs untouched */
-div[data-testid="stTabs"] > div:nth-child(2):has(.tf-pg-header) {
-  /* marker only — height handled via scroll containers below */
+/*
+ * Viewport-fit panes (Playground tab only). Streamlit/emotion sets a fixed px
+ * `height` on stLayoutWrapper; `height: auto` + matching min/max calc beats that
+ * so panes shrink on short laptops and grow on taller viewports. Other tabs keep
+ * normal document scroll (inactive panels are display:none; selectors stay scoped).
+ */
+[data-testid="stTabPanel"]:has(.tf-pg-header)
+  [data-testid="stLayoutWrapper"]:has(.tf-pg-pane-chat) {
+  height: auto !important;
+  min-height: calc(100vh - var(--tf-pg-chrome)) !important;
+  max-height: calc(100vh - var(--tf-pg-chrome)) !important;
+}
+[data-testid="stTabPanel"]:has(.tf-pg-header)
+  [data-testid="stLayoutWrapper"]:has(.tf-pg-pane-insp) {
+  height: auto !important;
+  min-height: calc(100vh - var(--tf-pg-chrome) + var(--tf-pg-samples)) !important;
+  max-height: calc(100vh - var(--tf-pg-chrome) + var(--tf-pg-samples)) !important;
+}
+[data-testid="stTabPanel"]:has(.tf-pg-header)
+  [data-testid="stLayoutWrapper"]:has(.tf-pg-pane-chat) [data-testid="stVerticalBlock"],
+[data-testid="stTabPanel"]:has(.tf-pg-header)
+  [data-testid="stLayoutWrapper"]:has(.tf-pg-pane-insp) [data-testid="stVerticalBlock"] {
+  height: 100% !important;
+  max-height: 100% !important;
+}
+[data-testid="stTabPanel"]:has(.tf-pg-header) [data-testid="stChatInput"] {
+  padding-top: 0 !important;
+}
+[data-testid="stTabPanel"]:has(.tf-pg-header)
+  [data-testid="stElementContainer"]:has([data-testid="stChatInput"]) {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
 }
 </style>
 """
@@ -439,10 +474,12 @@ def render_playground_tab(
     _paint_flow()
 
     left, right = st.columns([7.1, 2.9], gap="small")
-    chat_height = 430
+    # Fallback px if CSS calc is unavailable; PLAYGROUND_CSS overrides via 100vh.
+    chat_height = 300
 
     with left:
         with st.container(height=chat_height, border=False):
+            html('<div class="tf-pg-pane-chat" aria-hidden="true"></div>')
             if not st.session_state.messages:
                 html(
                     """
@@ -476,6 +513,7 @@ def render_playground_tab(
 
     with right:
         with st.container(height=chat_height + 48, border=True):
+            html('<div class="tf-pg-pane-insp" aria-hidden="true"></div>')
             render_route_inspector(state, links=links, html=html)
 
     prompt = st.chat_input("Ask Token Factory… e.g. Write a ROCm kernel sketch in Python")
