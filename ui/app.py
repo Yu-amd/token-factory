@@ -870,7 +870,8 @@ with tab_matrix:
 
     if str(ROOT / "src") not in sys.path:
         sys.path.insert(0, str(ROOT / "src"))
-    from token_factory.routing_matrix import RecommendationEngine
+    from token_factory.routing_matrix import RecommendationEngine, resolve_export
+    from token_factory.routing_matrix.projection import get_current_matrix_projection
 
     try:
         engine = RecommendationEngine()
@@ -1124,35 +1125,15 @@ with tab_matrix:
                     """
                 )
 
-            # Matrix columns: full compute catalog (group toggle); Executive uses focus ordering.
-            view_mode = matrix.get("view_mode") or "portfolio"
-            if view_mode == "executive":
-                focus_col_ids = tuple(matrix.get("focus_columns") or [])
-                if not focus_col_ids:
-                    focus_col_ids = (
-                        "MI300X",
-                        "MI325X",
-                        "MI350P",
-                        "MI350X",
-                        "MI355X",
-                        "EPYC_9965",
-                        "R9700",
-                        "W7900",
-                    )
-                display_cols = [c for c in matrix["columns"] if c in focus_col_ids]
-                for required in ("MI350P", "R9700", "W7900"):
-                    if required not in display_cols and required in (matrix.get("columns_all") or matrix.get("columns") or []):
-                        display_cols.append(required)
-            else:
-                display_cols = list(matrix.get("columns") or [])
+            # Same projection helper used by PowerPoint-ready export (exact UI rows/cols).
+            projection = get_current_matrix_projection(matrix)
+            view_mode = projection.view_mode
+            display_cols = list(projection.columns)
+            row_models = list(projection.rows)
 
-            row_models = list(matrix.get("display_rows") or [])
-            if not row_models:
-                row_models = list(matrix.get("rows") or [])
-
-            row_status = matrix.get("row_status") or {}
-            why_not = matrix.get("why_not_recommended") or {}
-            cc = matrix.get("catalog_counts") or {}
+            row_status = projection.row_status
+            why_not = projection.why_not_recommended
+            cc = projection.catalog_counts
             catalog_n = cc.get("catalog_models") or len(matrix.get("rows") or [])
             shown_n = len(row_models)
             strip = (
@@ -1296,6 +1277,73 @@ with tab_matrix:
                 </div>
                 """
             )
+
+            with st.expander("Export for PowerPoint", expanded=False):
+                st.caption(
+                    "Exports the same matrix projection shown above. "
+                    "Routing policy output — not a benchmark."
+                )
+                ex1, ex2, ex3 = st.columns(3)
+                with ex1:
+                    export_scope = st.selectbox(
+                        "Scope",
+                        ["Current View", "All Use Cases"],
+                        key="matrix_export_scope",
+                        help="Current View = exact filtered rows/cols. "
+                        "All Use Cases keeps lifecycle/objective/view filters.",
+                    )
+                with ex2:
+                    export_style = st.selectbox(
+                        "Style",
+                        ["Slide (16:9)", "Full Matrix"],
+                        key="matrix_export_style",
+                    )
+                with ex3:
+                    export_format = st.selectbox(
+                        "Format",
+                        ["PNG", "CSV", "ZIP Bundle"],
+                        key="matrix_export_format",
+                    )
+                if export_scope == "All Use Cases" and export_format == "PNG":
+                    st.caption("All Use Cases + PNG downloads as a ZIP of per-use-case PNGs.")
+                if st.button("Generate export", key="matrix_export_btn"):
+                    try:
+                        style_key = "slide" if export_style.startswith("Slide") else "full"
+                        fmt_key = {"PNG": "png", "CSV": "csv", "ZIP Bundle": "zip"}[export_format]
+                        scope_key = "current" if export_scope == "Current View" else "all"
+                        result = resolve_export(
+                            engine=engine,
+                            matrix=matrix,
+                            scope=scope_key,
+                            format=fmt_key,  # type: ignore[arg-type]
+                            style=style_key,  # type: ignore[arg-type]
+                            matrix_kwargs={
+                                "objective": obj_opts[obj_label],
+                                "deployment": dep_opts[dep_label],
+                                "utilization": util,
+                                "show": show_opts[show_label],
+                                "lifecycle_mode": life_mode,
+                                "data_locality": data_loc,
+                                "serving_pattern": serve_pattern,
+                                "view_mode": view_opts[view_label],
+                                "search": search_q or None,
+                                "vendor": vendor_filter or None,
+                                "compute_group": compute_group_opts[compute_group_label],
+                                "endpoints": endpoints,
+                            },
+                            endpoints=endpoints,
+                        )
+                        if result.note:
+                            st.info(result.note)
+                        st.download_button(
+                            label=f"Download {result.filename}",
+                            data=result.data,
+                            file_name=result.filename,
+                            mime=result.mime,
+                            key="matrix_export_download",
+                        )
+                    except Exception as export_exc:
+                        st.warning(f"Export failed: {export_exc}")
 
             st.markdown("#### Cell detail / Simulate route")
             # Inspect any visible model/cell — not only ranked[:12]

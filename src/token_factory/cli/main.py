@@ -518,6 +518,61 @@ def matrix_audit(
         console.print(table)
 
 
+@matrix_app.command("export")
+def matrix_export(
+    use_case: str = typer.Option(
+        "coding-assistant", "--use-case", "-u", help="Use-case id (ignored when --all)"
+    ),
+    output: Path = typer.Option(..., "--output", "-o", help="Output file path"),
+    format_name: str = typer.Option(
+        "png", "--format", "-f", help="png|csv|zip|svg"
+    ),
+    style: str = typer.Option("slide", "--style", help="slide|full"),
+    scope: str = typer.Option(
+        "current", "--scope", help="current|all (all+png → zip of pngs)"
+    ),
+    view_mode: str = typer.Option("portfolio", "--view", help="portfolio|executive"),
+    lifecycle: str = typer.Option("production", "--lifecycle", "-L"),
+    objective: str = typer.Option("balanced", "--objective", "-O"),
+    show: str = typer.Option("all", "--show"),
+) -> None:
+    """Export Routing Matrix projection (PowerPoint-ready; not a benchmark)."""
+    from token_factory.routing_matrix import RecommendationEngine, resolve_export
+
+    engine = RecommendationEngine()
+    matrix = None
+    if scope != "all":
+        matrix = engine.matrix(
+            use_case,
+            objective=objective,
+            lifecycle_mode=lifecycle,
+            view_mode=view_mode,
+            show=show,
+        )
+    result = resolve_export(
+        engine=engine,
+        matrix=matrix,
+        scope="all" if scope == "all" else "current",  # type: ignore[arg-type]
+        format=format_name,  # type: ignore[arg-type]
+        style=style,  # type: ignore[arg-type]
+        matrix_kwargs={
+            "objective": objective,
+            "lifecycle_mode": lifecycle,
+            "view_mode": view_mode,
+            "show": show,
+        },
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(result.data)
+    console.print(
+        f"[green]Wrote[/green] {output} ({len(result.data)} bytes) · "
+        f"{result.format}/{result.style}/{result.scope}"
+    )
+    if result.note:
+        console.print(f"[dim]{result.note}[/dim]")
+    console.print("[dim]Routing policy output — not a benchmark[/dim]")
+
+
 @app.command()
 def recommend(
     use_case: str | None = typer.Option(

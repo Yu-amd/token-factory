@@ -228,10 +228,12 @@ Streamlit tab **AMD Routing Matrix** (`make ui` → tab) **starts at the control
 - Cell tags: GA / Preview / Tech Preview; ◌ = capability mismatch (not `—`)
 - Inspect any visible model/cell (not only ranked[:12]); **why not recommended** in detail
 - Simulate route explains MI350P / Radeon lifecycle exclusions
+- **Export for PowerPoint** (expander): Current View or All Use Cases → Slide / Full → PNG / CSV / ZIP — same projection as the grid; see [routing-matrix-export.md](routing-matrix-export.md)
 
 ## Related docs
 
 - [AIM catalog](aim-catalog.md)
+- [Routing Matrix export](routing-matrix-export.md)
 - [Routing economics](routing-economics.md)
 - [Routing policies (V1)](routing-policy.md)
 - [AIM / compute guide](amd-compute-guide.md)
