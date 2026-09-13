@@ -13,5 +13,6 @@ kubectl create configmap grafana-dashboard-token-factory \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f "${REPO_ROOT}/deploy/manifests/observability/prometheus.yaml"
 kubectl apply -f "${REPO_ROOT}/deploy/manifests/observability/grafana.yaml"
+wait_deploy observability prometheus 180s || warn "Prometheus not ready yet"
 wait_deploy observability grafana 180s || warn "Grafana not ready yet"
 success "Observability stack applied"

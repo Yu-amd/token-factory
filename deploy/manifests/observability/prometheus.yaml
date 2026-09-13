@@ -1,3 +1,37 @@
+# Prometheus for Token Factory.
+# WHY: needs RBAC to list pods for kubernetes_sd, Envoy metrics on /stats/prometheus:19001
+# (not /metrics), and SR metrics only on router pods :9190.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: token-factory-prometheus
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: token-factory-prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: token-factory-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: observability
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -11,20 +45,48 @@ data:
       - job_name: prometheus
         static_configs:
           - targets: ['localhost:9090']
+
+      # Envoy data-plane pods annotate prometheus.io/{scrape,port,path}.
       - job_name: envoy-gateway
         kubernetes_sd_configs:
           - role: pod
             namespaces:
               names: [envoy-gateway-system]
         relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
             action: keep
-            regex: envoy
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: instance
+
+      # Router container exposes :9190/metrics; exclude dashboard pods.
       - job_name: semantic-router
         kubernetes_sd_configs:
           - role: pod
             namespaces:
               names: [vllm-semantic-router-system]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_token_factory_amd_com_role]
+            action: keep
+            regex: router
+          - source_labels: [__address__]
+            action: replace
+            regex: ([^:]+)(?::\d+)?
+            replacement: $1:9190
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: instance
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -41,10 +103,14 @@ spec:
       labels:
         app: prometheus
     spec:
+      serviceAccountName: prometheus
       containers:
         - name: prometheus
           image: prom/prometheus:v2.55.1
-          args: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --web.enable-lifecycle
           ports:
             - containerPort: 9090
           volumeMounts:
