@@ -157,7 +157,22 @@ Dashboard definitions:
 - [`observability/grafana/token-factory-automated-demo.json`](../observability/grafana/token-factory-automated-demo.json) — **Token Factory Automated Demo** (`token_factory_demo_*`)
 - [`observability/grafana/token-factory-dashboard.json`](../observability/grafana/token-factory-dashboard.json) — gateway + SR scrape (`envoy_*`, `llm_*`)
 
-**Live demo panels:** keep the Streamlit UI running, open Grafana → *Token Factory Automated Demo*, run a pack from the Automated Demo tab. Panels refresh every ~10s once Prometheus shows job `token-factory-demo` UP.
+**Availability panels (mental model “fallback to MI300X”):**
+
+| Panel | PromQL (non-zero without inject) |
+|-------|----------------------------------|
+| Runtime escalation (preferred unavailable) | `sum(token_factory_demo_runtime_escalation_total)` |
+| Non-primary routes | `sum(…_runtime_escalation_total) + sum(…_fallback_total)` |
+| Endpoint fallback (injected) | `sum(token_factory_demo_fallback_total)` — near 0 without inject |
+
+**Live demo panels:** keep metrics on `:9108` (`make ui` or `python -m token_factory.demo.metrics_server`), open Grafana → *Token Factory Automated Demo*, run smoke/enterprise-mixed **without** preferred-endpoint inject. Escalation should rise when preferred SKUs are not in inventory.
+
+**Reload after editing the JSON** (cluster copy is a ConfigMap — repo edits do not apply until re-provision):
+
+```bash
+bash scripts/install-observability.sh
+kubectl -n observability rollout restart deploy/grafana
+```
 
 Gateway latency panels reuse existing Envoy metrics as operational context only.
 

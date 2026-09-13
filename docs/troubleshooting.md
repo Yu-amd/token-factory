@@ -74,4 +74,14 @@ For **Automated Demo** panels: keep `make ui` running (starts `:9108/metrics`), 
 Prometheus target `token-factory-demo` is UP, and open the *Token Factory Automated Demo*
 dashboard (`token_factory_demo_*` — not an SR intent placeholder).
 
+If **Fallback count** is always zero but traffic escalates to MI300X: that traffic is
+`token_factory_demo_runtime_escalation_total`, not `_fallback_total`. Re-apply
+observability so Grafana picks up the **Runtime escalation** / **Non-primary routes**
+panels from `observability/grafana/token-factory-automated-demo.json`, then run
+`token-factory demo run --pack smoke --mock` (no inject) and check:
+
+```promql
+sum(token_factory_demo_runtime_escalation_total)
+```
+
 See [observability.md](observability.md).

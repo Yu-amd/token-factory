@@ -368,6 +368,34 @@ def test_preferred_not_deployed_increments_runtime_escalation():
     )
 
 
+def test_smoke_mi300x_only_inventory_increments_escalation():
+    """Smoke without inject on MI300X-only inventory must scrape escalation > 0.
+
+    Matches the operator mental model “fallback to MI300X” when preferred SKUs
+    (e.g. MI355X) are not deployed — counted as runtime_escalation, not injected
+    fallback_total.
+    """
+    from token_factory.config import load_endpoints
+
+    inventory = [
+        dict(ep)
+        for ep in load_endpoints().get("endpoints", [])
+        if ep.get("accelerator") == "MI300X" and ep.get("enabled", True)
+    ]
+    assert inventory, "expected at least one enabled MI300X endpoint"
+    assert all(ep.get("accelerator") == "MI300X" for ep in inventory)
+
+    instr = DemoInstrumentor()
+    runner = DemoRunner(mock=True, endpoints=inventory, instrumentor=instr)
+    run = runner.run("smoke", mock=True, persist=False)
+    summary = run.validation_summary
+    assert summary.get("runtime_escalations", 0) > 0
+    assert sum(instr.get_counter("token_factory_demo_runtime_escalation_total").values()) > 0
+    # Smoke has one inject scenario; preferred-not-deployed escalations dominate
+    assert summary.get("fallbacks", 0) < summary["runtime_escalations"]
+    assert "token_factory_demo_runtime_escalation_total" in instr.prometheus_text()
+
+
 def test_ci_policy_ok_ignores_latency():
     runner = DemoRunner(mock=True)
     run = runner.run("smoke", mock=True, ci=True, persist=False)

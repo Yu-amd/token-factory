@@ -3,10 +3,10 @@
   "uid": "token-factory-automated-demo",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 3,
+  "version": 5,
   "refresh": "10s",
   "tags": ["token-factory", "automated-demo", "routing-policy", "observability"],
-  "description": "Routing-policy and observability validation for Automated Demo traffic. Panels use token_factory_demo_* counters scraped from the host UI/CLI metrics port (:9108). Latency/TTFT panels are operational Envoy telemetry only — not comparative hardware claims.",
+  "description": "Routing-policy and observability validation for Automated Demo traffic. Panels use token_factory_demo_* counters scraped from the host UI/CLI metrics port (:9108). Preferred-not-deployed → next eligible (e.g. MI355X → MI300X) is Runtime escalation, not injected Endpoint fallback. Latency/TTFT panels are operational Envoy telemetry only — not comparative hardware claims.",
   "templating": {
     "list": [
       {
@@ -85,7 +85,7 @@
       "title": "Requests by compute family",
       "description": "token_factory_demo_requests_total by compute_family — Instinct / EPYC / Radeon routing coverage, not a hardware shootout.",
       "type": "piechart",
-      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
@@ -99,7 +99,7 @@
       "title": "Validation pass / fail",
       "description": "token_factory_demo_validation_total by validation_status (PASS / WARN / FAIL / N/A).",
       "type": "timeseries",
-      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
@@ -109,30 +109,44 @@
       ]
     },
     {
-      "id": 5,
-      "title": "Endpoint fallback (injected)",
-      "description": "token_factory_demo_fallback_total — preferred-endpoint-unavailable injection / endpoint-failure skip. Not preferred-not-deployed escalation (see Runtime escalation panel).",
+      "id": 10,
+      "title": "Runtime escalation (preferred unavailable)",
+      "description": "PRIMARY availability signal: token_factory_demo_runtime_escalation_total — canonical preferred model×compute not deployed; next eligible deployed candidate selected (e.g. MI355X → MI300X). This is what operators mean by “fallback to MI300X” when inventory lacks the preferred SKU. Not a performance claim.",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 4, "x": 12, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(token_factory_demo_runtime_escalation_total{scenario=~\"$scenario\",lifecycle=~\"$lifecycle\"}) or vector(0)",
+          "legendFormat": "runtime escalations"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Non-primary routes",
+      "description": "Combined availability detours: runtime escalation (preferred not deployed) + injected endpoint fallback. PromQL sums both series so “left primary preferred” traffic is visible in one place.",
       "type": "stat",
       "gridPos": {"h": 8, "w": 4, "x": 16, "y": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(increase(token_factory_demo_fallback_total{scenario=~\"$scenario\",lifecycle=~\"$lifecycle\"}[1h]))",
-          "legendFormat": "injected fallbacks"
+          "expr": "(sum(token_factory_demo_runtime_escalation_total{scenario=~\"$scenario\",lifecycle=~\"$lifecycle\"}) or vector(0)) + (sum(token_factory_demo_fallback_total{scenario=~\"$scenario\",lifecycle=~\"$lifecycle\"}) or vector(0))",
+          "legendFormat": "non-primary"
         }
       ]
     },
     {
-      "id": 10,
-      "title": "Runtime escalation (preferred unavailable)",
-      "description": "token_factory_demo_runtime_escalation_total — canonical preferred not deployed; next eligible deployed candidate selected (e.g. MI355X → MI300X). Availability routing, not performance.",
+      "id": 5,
+      "title": "Endpoint fallback (injected)",
+      "description": "Secondary: token_factory_demo_fallback_total — preferred-endpoint-unavailable injection / endpoint-failure skip only. Stays near zero without failure injection. Prefer Runtime escalation for preferred-not-deployed inventory gaps.",
       "type": "stat",
       "gridPos": {"h": 8, "w": 4, "x": 20, "y": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
-          "expr": "sum(increase(token_factory_demo_runtime_escalation_total{scenario=~\"$scenario\",lifecycle=~\"$lifecycle\"}[1h]))",
-          "legendFormat": "runtime escalations"
+          "expr": "sum(token_factory_demo_fallback_total{scenario=~\"$scenario\",lifecycle=~\"$lifecycle\"}) or vector(0)",
+          "legendFormat": "injected fallbacks"
         }
       ]
     },
@@ -193,7 +207,7 @@
       ]
     },
     {
-      "id": 10,
+      "id": 12,
       "title": "Route failures / 5xx (context)",
       "description": "Envoy 5xx class rate while demos run.",
       "type": "timeseries",

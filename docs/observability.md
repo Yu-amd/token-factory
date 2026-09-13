@@ -17,7 +17,7 @@
 |--------|-----|----------|
 | Envoy AI Gateway | `envoy-gateway` | `envoy_http_downstream_rq_total`, `envoy_cluster_upstream_rq_*`, 5xx class |
 | Semantic Router | `semantic-router` | `llm_reasoning_decisions_total` (by `category`), `llm_model_selection_total` (by `model`), latency histograms |
-| Automated Demo (host UI/CLI) | `token-factory-demo` | `token_factory_demo_requests_total`, `_validation_total`, `_fallback_total`, `_route_total` |
+| Automated Demo (host UI/CLI) | `token-factory-demo` | `token_factory_demo_requests_total`, `_validation_total`, `_fallback_total`, `_runtime_escalation_total`, `_route_total` |
 
 There is **no** separate “Model Intent Mix” placeholder series. Category/route mix uses
 `llm_reasoning_decisions_total{category=…}` from the Semantic Router scrape.
@@ -63,8 +63,27 @@ the scrape target matches your kind bridge gateway (`docker network inspect kind
 **Automated Demo** (`token-factory-automated-demo`):
 
 - Requests by use case / model / compute family / lifecycle
-- Validation pass/fail, injected endpoint fallbacks, runtime escalations (preferred not deployed)
+- Validation pass/fail
+- **Runtime escalation (preferred unavailable)** — primary “fallback to MI300X” signal (`token_factory_demo_runtime_escalation_total`)
+- **Non-primary routes** — escalation + injected fallback combined
+- Injected endpoint fallback (secondary; near zero without failure injection)
 - Envoy rate/latency as operational context only
+
+### Reload Grafana dashboards from repo
+
+`scripts/install-observability.sh` recreates ConfigMap `grafana-dashboard-token-factory`
+from the JSON under `observability/grafana/` (including
+`token-factory-automated-demo.json`). After editing dashboards:
+
+```bash
+bash scripts/install-observability.sh
+kubectl -n observability rollout restart deploy/grafana
+kubectl -n observability rollout status deploy/grafana
+```
+
+Grafana file provisioning reads the mounted ConfigMap; restart ensures the new
+JSON is picked up. Then open **Token Factory Automated Demo** and confirm panel
+titles include **Runtime escalation (preferred unavailable)**.
 
 ## Port forwards
 
