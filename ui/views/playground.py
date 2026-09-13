@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import html as html_lib
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 _UI_ROOT = Path(__file__).resolve().parents[1]
 if str(_UI_ROOT) not in sys.path:
@@ -393,22 +395,83 @@ def _esc(value: Any) -> str:
     return html_lib.escape("" if value is None else str(value))
 
 
+# Live thinking iframe: body max-height + label chrome (~200px total).
+_THINKING_LIVE_HEIGHT = 200
+_THINKING_UI_THROTTLE_S = 0.06  # ~60ms between iframe refreshes
+
+
 def _thinking_box_html(text: str) -> str:
-    """Labeled thinking pane with instant auto-scroll to bottom (no smooth scroll)."""
+    """Static thinking pane for history expanders (no live scroll required)."""
     body = _esc(text)
     return (
         '<div class="tf-pg-thinking" role="region" aria-label="Thinking">'
         '<div class="tf-pg-thinking-label">Thinking</div>'
-        f'<div class="tf-pg-thinking-body" id="tf-pg-thinking-scroll">{body}</div>'
+        f'<div class="tf-pg-thinking-body">{body}</div>'
         "</div>"
-        "<script>"
-        "(function(){"
-        "var el=document.getElementById('tf-pg-thinking-scroll');"
-        "if(!el)return;"
-        "el.scrollTop=el.scrollHeight;"
-        "})();"
-        "</script>"
     )
+
+
+def _thinking_live_html(text: str) -> str:
+    """Self-contained thinking pane for components.html (scripts run in iframe)."""
+    body = _esc(text)
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<style>
+html,body{{margin:0;padding:0;background:transparent;}}
+.tf-pg-thinking{{
+  margin:0;
+  border:1px solid rgba(255,255,255,0.14);
+  border-radius:0.4rem;
+  background:rgba(255,255,255,0.03);
+  overflow:hidden;
+}}
+.tf-pg-thinking-label{{
+  font-size:0.68rem;
+  letter-spacing:0.05em;
+  text-transform:uppercase;
+  color:rgba(255,255,255,0.55);
+  padding:0.35rem 0.55rem 0.1rem;
+  font-weight:600;
+  font-family:system-ui,-apple-system,sans-serif;
+}}
+.tf-pg-thinking-body{{
+  height:160px;
+  overflow-y:auto;
+  padding:0.2rem 0.55rem 0.5rem;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:0.72rem;
+  line-height:1.45;
+  color:rgba(255,255,255,0.55);
+  white-space:pre-wrap;
+  word-break:break-word;
+  scroll-behavior:auto;
+}}
+</style></head><body>
+<div class="tf-pg-thinking" role="region" aria-label="Thinking">
+<div class="tf-pg-thinking-label">Thinking</div>
+<div class="tf-pg-thinking-body" id="tf-pg-thinking-scroll">{body}</div>
+</div>
+<script>
+(function(){{
+  var el=document.getElementById("tf-pg-thinking-scroll");
+  if(!el)return;
+  function jump(){{el.scrollTop=el.scrollHeight;}}
+  jump();
+  requestAnimationFrame(jump);
+}})();
+</script>
+</body></html>
+"""
+
+
+def _render_thinking_live(slot: Any, text: str) -> None:
+    """Replace the live thinking iframe so auto-scroll JS executes."""
+    with slot.container():
+        components.html(
+            _thinking_live_html(text),
+            height=_THINKING_LIVE_HEIGHT,
+            scrolling=False,
+        )
 
 
 def _health_class(value: str) -> str:
@@ -646,6 +709,19 @@ def render_playground_tab(
             content_chunks: list[str] = []
             first = True
             saw_token = False
+            last_thinking_ui = 0.0
+            thinking_dirty = False
+
+            def flush_thinking(*, force: bool = False) -> None:
+                nonlocal last_thinking_ui, thinking_dirty
+                if not reasoning_chunks or not thinking_dirty:
+                    return
+                now = time.monotonic()
+                if not force and (now - last_thinking_ui) < _THINKING_UI_THROTTLE_S:
+                    return
+                _render_thinking_live(thinking_slot, "".join(reasoning_chunks))
+                last_thinking_ui = now
+                thinking_dirty = False
 
             for kind, piece in stream_chat_completion_parts(
                 prompt,
@@ -672,11 +748,15 @@ def render_playground_tab(
 
                 if kind == "reasoning":
                     reasoning_chunks.append(piece)
-                    thinking_slot.html(_thinking_box_html("".join(reasoning_chunks)))
+                    thinking_dirty = True
+                    flush_thinking()
                 else:
+                    # Flush any pending reasoning before content takes over.
+                    flush_thinking(force=True)
                     content_chunks.append(piece)
                     answer_slot.markdown("".join(content_chunks))
 
+            flush_thinking(force=True)
             reply = "".join(content_chunks)
             reasoning_text = "".join(reasoning_chunks)
 
