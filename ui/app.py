@@ -34,6 +34,7 @@ def probe(url: str, path: str = "/health") -> str:
 
 meta = load_metadata()
 links = meta.get("links", {})
+VIRTUAL_MODEL = meta.get("virtual_model") or VIRTUAL_MODEL
 
 st.title("AMD Token Factory")
 st.caption("Config-driven semantic routing reference architecture")

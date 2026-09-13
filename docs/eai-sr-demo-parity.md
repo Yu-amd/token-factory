@@ -19,7 +19,7 @@ Reference demo: `/tmp/eai-sr-demo` (functional lessons only; **not** copied stru
 | eai-sr-demo | Token Factory |
 |-------------|---------------|
 | Hard-coded manifests | Config compiler → `generated/` |
-| `MoM` virtual model | `token-factory/auto` |
+| `MoM` virtual model (SR default) | `token-factory/auto` via `global.router.auto_model_name` |
 | `default` namespace | `token-factory` namespace |
 | Latest Helm tags | Pinned SR 0.3.0 / AIGW v0.4.0 / EG v1.6.0 |
 | pkill/lsof port cleanup | PID-tracked port-forward manager |

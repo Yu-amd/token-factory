@@ -99,6 +99,16 @@ def compile_semantic_router_values(
             else:
                 unique_domains.append({"name": domain, "description": domain})
 
+    virtual_model = (
+        policy.get("virtual_model")
+        or (token_factory or {}).get("virtual_model", VIRTUAL_MODEL)
+    )
+
+    # WHY: SR defaults auto_model_name to "MoM". Clients that send our branded
+    # virtual model (token-factory/auto) otherwise bypass intelligent routing and
+    # AIGW returns 404 (no AIGatewayRoute match for that model id).
+    # UPSTREAM: global.router.auto_model_name / GetEffectiveAutoModelName
+    # WHEN REMOVABLE: if chart/recipe defaults advertise token-factory/auto.
     sr_config = {
         "version": "v0.3",
         "listeners": [],
@@ -121,7 +131,11 @@ def compile_semantic_router_values(
             "decisions": decisions,
             "signals": {"domains": unique_domains},
         },
-        "global": {},
+        "global": {
+            "router": {
+                "auto_model_name": virtual_model,
+            }
+        },
     }
 
     dashboard_cfg = (token_factory or {}).get("components", {}).get(
@@ -151,7 +165,6 @@ def compile_semantic_router_values(
         "dependencies": {"semanticCache": {"redis": {"enabled": False}}},
         "replicaCount": 1,
         "metadata": {
-            "virtual_model": policy.get("virtual_model")
-            or (token_factory or {}).get("virtual_model", VIRTUAL_MODEL),
+            "virtual_model": virtual_model,
         },
     }

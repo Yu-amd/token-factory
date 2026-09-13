@@ -23,6 +23,7 @@ def test_compile_outputs(tmp_path):
     assert sr["dashboard"]["service"]["port"] == 8700
     assert sr["config"]["version"] == "v0.3"
     assert len(sr["config"]["routing"]["decisions"]) >= 3
+    assert sr["config"]["global"]["router"]["auto_model_name"] == "token-factory/auto"
 
     manifests = list(yaml.safe_load_all(outputs["ai_gateway_manifests"].read_text()))
     kinds = {m["kind"] for m in manifests}

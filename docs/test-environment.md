@@ -80,7 +80,7 @@ Token Factory optional note: a `socat` forward `0.0.0.0:8000 → 172.18.0.5:8000
 
 ## Verified routing (Token Factory on kind → public AIMs)
 
-Virtual model: `token-factory/auto` (also accepts `MoM` via SR)
+Virtual model: `token-factory/auto` (SR `global.router.auto_model_name`; bare `auto` still works)
 
 | Workload | Example | Model | Endpoint |
 |----------|---------|-------|----------|
