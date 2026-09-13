@@ -30,32 +30,41 @@ def _backend_manifest(name: str, host: str, port: int, namespace: str) -> dict[s
     }
 
 
-def _backend_traffic_policy(backend_name: str, namespace: str) -> dict[str, Any]:
+def _gateway_traffic_policy(gateway_name: str, namespace: str) -> dict[str, Any]:
+    # WHY: BackendTrafficPolicy may only target Gateway/HTTPRoute/... (not Backend).
+    # Health checks + retries apply at the gateway scope for demo reliability.
     return {
         "apiVersion": "gateway.envoyproxy.io/v1alpha1",
         "kind": "BackendTrafficPolicy",
-        "metadata": {"name": f"health-{backend_name}", "namespace": namespace},
+        "metadata": {"name": "token-factory-failover", "namespace": namespace},
         "spec": {
             "targetRefs": [
                 {
-                    "group": "gateway.envoyproxy.io",
-                    "kind": "Backend",
-                    "name": backend_name,
+                    "group": "gateway.networking.k8s.io",
+                    "kind": "Gateway",
+                    "name": gateway_name,
                 }
             ],
             "healthCheck": {
                 "active": {
                     "type": "HTTP",
-                    "http": {"path": "/v1/models", "method": "GET"},
+                    "http": {"path": "/v1/models", "expectedStatuses": [200]},
                     "interval": "10s",
                     "timeout": "3s",
-                    "unhealthyThreshold": 3,
+                    "unhealthyThreshold": 2,
                     "healthyThreshold": 1,
                 }
             },
             "retry": {
                 "numRetries": 2,
-                "perRetry": {"backOff": {"baseInterval": "100ms"}},
+                "retryOn": {
+                    "triggers": [
+                        "connect-failure",
+                        "refused-stream",
+                        "unavailable",
+                        "reset",
+                    ]
+                },
             },
         },
     }
@@ -234,7 +243,8 @@ def compile_ai_gateway_manifests(
         emitted_backends.add(backend_name)
         manifests.append(_backend_manifest(backend_name, ep["host"], ep["port"], gateway_ns))
         manifests.append(_aiservice_backend(backend_name, gateway_ns))
-        manifests.append(_backend_traffic_policy(backend_name, gateway_ns))
+
+    manifests.append(_gateway_traffic_policy(gateway_name, gateway_ns))
 
     # Merge routes that share the same x-ai-eg-model match key.
     rules_by_model: dict[str, dict[str, Any]] = {}
@@ -251,13 +261,14 @@ def compile_ai_gateway_manifests(
                 "priority": 0,
             }
         ]
-        # Add policy fallback chain as higher Envoy priorities (failover).
+        # Same-model endpoint failover only. Cross-model fallback requires body
+        # rewrite (modelNameOverride), which is unreliable under dual extproc.
         priority = 1
         for fb_id in fallback_chain:
             if fb_id == route["endpoint_ref"]:
                 continue
             fb_ep = endpoint_map.get(fb_id)
-            if not fb_ep:
+            if not fb_ep or fb_ep["model"] != ep["model"]:
                 continue
             backend_refs.append(
                 {
