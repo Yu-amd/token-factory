@@ -546,6 +546,39 @@ def resolve_aim_target(
     return url, str(model_id), str(matched.get("name") or decision or "route")
 
 
+def _extract_delta_reasoning(delta: dict[str, Any]) -> str:
+    """Pull reasoning text from OpenAI / vLLM delta variants."""
+    raw = delta.get("reasoning")
+    if raw is None or raw == "":
+        raw = delta.get("reasoning_content")
+    if isinstance(raw, dict):
+        raw = (
+            raw.get("content")
+            or raw.get("text")
+            or raw.get("reasoning")
+            or raw.get("reasoning_content")
+            or ""
+        )
+    if isinstance(raw, list):
+        parts: list[str] = []
+        for item in raw:
+            if isinstance(item, dict):
+                parts.append(
+                    str(
+                        item.get("text")
+                        or item.get("content")
+                        or item.get("reasoning_content")
+                        or ""
+                    )
+                )
+            elif item:
+                parts.append(str(item))
+        return "".join(parts)
+    if raw is None:
+        return ""
+    return raw if isinstance(raw, str) else str(raw)
+
+
 def _iter_sse_parts(
     response: httpx.Response, meta: dict[str, Any]
 ) -> Iterator[tuple[str, str]]:
@@ -571,8 +604,15 @@ def _iter_sse_parts(
         if choice.get("finish_reason"):
             meta["finish"] = choice["finish_reason"]
         delta = choice.get("delta") or {}
-        reasoning = delta.get("reasoning") or ""
+        reasoning = _extract_delta_reasoning(delta)
         content = delta.get("content") or ""
+        if isinstance(content, list):
+            content = "".join(
+                part.get("text", "") if isinstance(part, dict) else str(part)
+                for part in content
+            )
+        elif not isinstance(content, str):
+            content = str(content) if content else ""
         if reasoning:
             meta["saw_reasoning"] = True
             yield ("reasoning", reasoning)

@@ -455,7 +455,28 @@ html,body{{margin:0;padding:0;background:transparent;}}
 (function(){{
   var el=document.getElementById("tf-pg-thinking-scroll");
   if(!el)return;
-  function jump(){{el.scrollTop=el.scrollHeight;}}
+  function scrollParentChat(){{
+    try{{
+      var doc=window.parent&&window.parent.document;
+      if(!doc)return;
+      var marker=doc.querySelector(".tf-pg-pane-chat");
+      if(!marker)return;
+      var wrap=marker.closest('[data-testid="stLayoutWrapper"]');
+      if(!wrap)return;
+      wrap.scrollTop=wrap.scrollHeight;
+      var kids=wrap.querySelectorAll(
+        '[data-testid="stVerticalBlock"], [data-testid="stChatMessageContent"]'
+      );
+      for(var i=0;i<kids.length;i++){{
+        var n=kids[i];
+        if(n.scrollHeight>n.clientHeight){{n.scrollTop=n.scrollHeight;}}
+      }}
+    }}catch(_e){{}}
+  }}
+  function jump(){{
+    el.scrollTop=el.scrollHeight;
+    scrollParentChat();
+  }}
   jump();
   requestAnimationFrame(jump);
 }})();
@@ -556,10 +577,16 @@ def render_playground_tab(
         st.session_state.pg_request = new_request_state(direct_stream=direct_stream)
     if "pg_selected_node" not in st.session_state:
         st.session_state.pg_selected_node = None
-    if "pg_pending_prompt" not in st.session_state:
+    if "pg_active_prompt" not in st.session_state:
+        st.session_state.pg_active_prompt = None
+    # Legacy sample-button key → active prompt (one-shot migrate).
+    if st.session_state.get("pg_pending_prompt") and not st.session_state.pg_active_prompt:
+        st.session_state.pg_active_prompt = st.session_state.pg_pending_prompt
         st.session_state.pg_pending_prompt = None
 
     state: RequestState = st.session_state.pg_request
+    active_prompt = st.session_state.pg_active_prompt
+    st.session_state.pg_active_prompt = None
 
     html(
         f"""
@@ -591,9 +618,11 @@ def render_playground_tab(
     chat_height = 300
 
     with left:
+        # Stream live assistant output *inside* this scrollable pane so Thinking
+        # stays on-screen (viewport-locked Playground has no page scroll).
         with st.container(height=chat_height, border=False):
             html('<div class="tf-pg-pane-chat" aria-hidden="true"></div>')
-            if not st.session_state.messages:
+            if not st.session_state.messages and not active_prompt:
                 html(
                     """
                     <div class="tf-pg-empty">
@@ -613,201 +642,192 @@ def render_playground_tab(
                     if msg.get("meta"):
                         st.caption(msg["meta"])
 
+            if active_prompt:
+                st.session_state.messages.append({"role": "user", "content": active_prompt})
+                state = new_request_state(direct_stream=direct_stream)
+                mark_classifying(state)
+                st.session_state.pg_request = state
+                _paint_flow()
+
+                with st.chat_message("user"):
+                    st.markdown(active_prompt)
+
+                with st.chat_message("assistant"):
+                    stream_meta: dict[str, Any] = {
+                        "model": None,
+                        "finish": None,
+                        "saw_content": False,
+                        "saw_reasoning": False,
+                        "gateway_buffered": False,
+                    }
+                    status = st.empty()
+                    status.caption("Classifying intent…")
+                    thinking_slot = st.empty()
+                    answer_slot = st.empty()
+
+                    def on_event(name: str, payload: dict[str, Any]) -> None:
+                        nonlocal state
+                        if name == "classifying":
+                            mark_classifying(state)
+                            status.caption("Classifying intent…")
+                        elif name == "classified":
+                            classified = payload.get("classified") or {}
+                            apply_classify(
+                                state,
+                                classified,
+                                classify_ms=payload.get("classify_ms"),
+                            )
+                            route_name = str(payload.get("route") or "")
+                            model_id = str(payload.get("model_id") or "")
+                            route = _lookup_route(meta, route_name)
+                            ep = (route or {}).get("endpoint") or {}
+                            pol = enrich_policy_from_metadata(meta, route_name, ep)
+                            rec = _optional_recommendation(
+                                pol.get("use_case"),
+                                pol.get("objective_alias"),
+                                meta.get("endpoints"),
+                            )
+                            apply_resolved_route(
+                                state,
+                                route_name=route_name,
+                                model_id=model_id,
+                                endpoint=ep,
+                                aim_url=payload.get("aim_url"),
+                                policy_meta=pol,
+                                recommendation=rec,
+                            )
+                            status.caption(f"Routed {route_name} · opening stream…")
+                        elif name == "fallback":
+                            mark_fallback(
+                                state,
+                                str(payload.get("reason") or "direct AIM failed"),
+                            )
+                            status.caption("Direct AIM failed — gateway fallback…")
+                        elif name == "streaming":
+                            mark_streaming(state, str(payload.get("stream_path") or "gateway"))
+                        st.session_state.pg_request = state
+                        _paint_flow()
+
+                    try:
+                        reasoning_chunks: list[str] = []
+                        content_chunks: list[str] = []
+                        first = True
+                        saw_token = False
+                        last_thinking_ui = 0.0
+                        thinking_dirty = False
+
+                        def flush_thinking(*, force: bool = False) -> None:
+                            nonlocal last_thinking_ui, thinking_dirty
+                            if not reasoning_chunks or not thinking_dirty:
+                                return
+                            now = time.monotonic()
+                            if not force and (now - last_thinking_ui) < _THINKING_UI_THROTTLE_S:
+                                return
+                            _render_thinking_live(thinking_slot, "".join(reasoning_chunks))
+                            last_thinking_ui = now
+                            thinking_dirty = False
+
+                        for kind, piece in stream_chat_completion_parts(
+                            active_prompt,
+                            virtual_model,
+                            stream_meta,
+                            meta,
+                            sr_api,
+                            on_event=on_event,
+                        ):
+                            if first:
+                                status.empty()
+                                first = False
+                            if not saw_token:
+                                saw_token = True
+                                content = bool(stream_meta.get("saw_content"))
+                                reasoning = bool(stream_meta.get("saw_reasoning"))
+                                mark_first_token(state, content=content or not reasoning)
+                                st.session_state.pg_request = state
+                                _paint_flow()
+                            elif stream_meta.get("saw_content") and not state.saw_content:
+                                mark_first_token(state, content=True)
+                                st.session_state.pg_request = state
+                                _paint_flow()
+
+                            if kind == "reasoning":
+                                reasoning_chunks.append(piece)
+                                thinking_dirty = True
+                                flush_thinking()
+                            else:
+                                flush_thinking(force=True)
+                                content_chunks.append(piece)
+                                answer_slot.markdown("".join(content_chunks))
+
+                        flush_thinking(force=True)
+                        reply = "".join(content_chunks)
+                        reasoning_text = "".join(reasoning_chunks)
+
+                        if not reply.strip():
+                            status.empty()
+                            body = chat_completion(active_prompt, virtual_model)
+                            reply = extract_reply(body)
+                            stream_meta["model"] = body.get("model")
+                            stream_meta["finish"] = (body.get("choices") or [{}])[0].get("finish_reason")
+                            stream_meta["stream_path"] = stream_meta.get("stream_path") or "gateway"
+                            if not state.stream_path:
+                                mark_streaming(state, "gateway")
+                            answer_slot.markdown(reply)
+
+                        state.model = stream_meta.get("model") or state.model
+                        state.finish = stream_meta.get("finish")
+                        state.gateway_buffered = bool(stream_meta.get("gateway_buffered"))
+                        state.saw_content = bool(stream_meta.get("saw_content")) or state.saw_content
+                        state.saw_reasoning = bool(stream_meta.get("saw_reasoning")) or state.saw_reasoning
+                        if stream_meta.get("stream_path"):
+                            state.stream_path = stream_meta["stream_path"]
+                        if stream_meta.get("classify_ms") is not None:
+                            state.classify_ms = stream_meta["classify_ms"]
+                        if stream_meta.get("direct_error") and not state.fallback:
+                            mark_fallback(state, str(stream_meta["direct_error"]))
+                        mark_complete(state)
+                        meta_line = caption_line(state)
+                        st.caption(meta_line)
+                        stored: dict[str, Any] = {
+                            "role": "assistant",
+                            "content": reply,
+                            "meta": meta_line,
+                        }
+                        if reasoning_text.strip():
+                            stored["reasoning"] = reasoning_text
+                        st.session_state.messages.append(stored)
+                        st.session_state.pg_request = state
+                        _paint_flow()
+                        st.rerun()
+                    except Exception as exc:
+                        status.empty()
+                        mark_failed(state, str(exc))
+                        st.session_state.pg_request = state
+                        _paint_flow()
+                        err = f"{exc} — check SR API (:8081) and AIM endpoints; or run token-factory ports start"
+                        st.error(err)
+                        st.session_state.messages.append({"role": "assistant", "content": err})
+
         s1, s2, s3, s4 = st.columns([1, 1, 1, 0.55])
         for col, sample in zip((s1, s2, s3), SAMPLE_PROMPTS):
             with col:
                 short = sample if len(sample) <= 40 else sample[:37] + "…"
                 if st.button(short, key=f"pg_sample_{abs(hash(sample)) % 10_000_000}"):
-                    st.session_state.pg_pending_prompt = sample
+                    st.session_state.pg_active_prompt = sample
                     st.rerun()
         with s4:
             if st.button("Clear", key="pg_clear"):
                 st.session_state.messages = []
-                st.session_state.pg_request = new_request_state(
-                    direct_stream=direct_stream
-                )
+                st.session_state.pg_active_prompt = None
+                st.session_state.pg_request = new_request_state(direct_stream=direct_stream)
                 st.rerun()
 
     with right:
         with st.container(height=chat_height + 48, border=True):
             html('<div class="tf-pg-pane-insp" aria-hidden="true"></div>')
-            render_route_inspector(state, links=links, html=html)
+            render_route_inspector(st.session_state.pg_request, links=links, html=html)
 
     prompt = st.chat_input("Ask Token Factory… e.g. Write a ROCm kernel sketch in Python")
-    if st.session_state.pg_pending_prompt and not prompt:
-        prompt = st.session_state.pg_pending_prompt
-        st.session_state.pg_pending_prompt = None
-
-    if not prompt:
-        return
-
-    st.session_state.messages.append({"role": "user", "content": prompt})
-
-    state = new_request_state(direct_stream=direct_stream)
-    mark_classifying(state)
-    st.session_state.pg_request = state
-    _paint_flow()
-
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    with st.chat_message("assistant"):
-        stream_meta: dict[str, Any] = {
-            "model": None,
-            "finish": None,
-            "saw_content": False,
-            "saw_reasoning": False,
-            "gateway_buffered": False,
-        }
-        status = st.empty()
-        status.caption("Classifying intent…")
-        thinking_slot = st.empty()
-        answer_slot = st.empty()
-
-        def on_event(name: str, payload: dict[str, Any]) -> None:
-            nonlocal state
-            if name == "classifying":
-                mark_classifying(state)
-                status.caption("Classifying intent…")
-            elif name == "classified":
-                classified = payload.get("classified") or {}
-                apply_classify(
-                    state,
-                    classified,
-                    classify_ms=payload.get("classify_ms"),
-                )
-                route_name = str(payload.get("route") or "")
-                model_id = str(payload.get("model_id") or "")
-                route = _lookup_route(meta, route_name)
-                ep = (route or {}).get("endpoint") or {}
-                pol = enrich_policy_from_metadata(meta, route_name, ep)
-                rec = _optional_recommendation(
-                    pol.get("use_case"),
-                    pol.get("objective_alias"),
-                    meta.get("endpoints"),
-                )
-                apply_resolved_route(
-                    state,
-                    route_name=route_name,
-                    model_id=model_id,
-                    endpoint=ep,
-                    aim_url=payload.get("aim_url"),
-                    policy_meta=pol,
-                    recommendation=rec,
-                )
-                status.caption(f"Routed {route_name} · opening stream…")
-            elif name == "fallback":
-                mark_fallback(state, str(payload.get("reason") or "direct AIM failed"))
-                status.caption("Direct AIM failed — gateway fallback…")
-            elif name == "streaming":
-                mark_streaming(state, str(payload.get("stream_path") or "gateway"))
-            st.session_state.pg_request = state
-            _paint_flow()
-
-        try:
-            reasoning_chunks: list[str] = []
-            content_chunks: list[str] = []
-            first = True
-            saw_token = False
-            last_thinking_ui = 0.0
-            thinking_dirty = False
-
-            def flush_thinking(*, force: bool = False) -> None:
-                nonlocal last_thinking_ui, thinking_dirty
-                if not reasoning_chunks or not thinking_dirty:
-                    return
-                now = time.monotonic()
-                if not force and (now - last_thinking_ui) < _THINKING_UI_THROTTLE_S:
-                    return
-                _render_thinking_live(thinking_slot, "".join(reasoning_chunks))
-                last_thinking_ui = now
-                thinking_dirty = False
-
-            for kind, piece in stream_chat_completion_parts(
-                prompt,
-                virtual_model,
-                stream_meta,
-                meta,
-                sr_api,
-                on_event=on_event,
-            ):
-                if first:
-                    status.empty()
-                    first = False
-                if not saw_token:
-                    saw_token = True
-                    content = bool(stream_meta.get("saw_content"))
-                    reasoning = bool(stream_meta.get("saw_reasoning"))
-                    mark_first_token(state, content=content or not reasoning)
-                    st.session_state.pg_request = state
-                    _paint_flow()
-                elif stream_meta.get("saw_content") and not state.saw_content:
-                    mark_first_token(state, content=True)
-                    st.session_state.pg_request = state
-                    _paint_flow()
-
-                if kind == "reasoning":
-                    reasoning_chunks.append(piece)
-                    thinking_dirty = True
-                    flush_thinking()
-                else:
-                    # Flush any pending reasoning before content takes over.
-                    flush_thinking(force=True)
-                    content_chunks.append(piece)
-                    answer_slot.markdown("".join(content_chunks))
-
-            flush_thinking(force=True)
-            reply = "".join(content_chunks)
-            reasoning_text = "".join(reasoning_chunks)
-
-            if not reply.strip():
-                status.empty()
-                body = chat_completion(prompt, virtual_model)
-                reply = extract_reply(body)
-                stream_meta["model"] = body.get("model")
-                stream_meta["finish"] = (body.get("choices") or [{}])[0].get(
-                    "finish_reason"
-                )
-                stream_meta["stream_path"] = stream_meta.get("stream_path") or "gateway"
-                if not state.stream_path:
-                    mark_streaming(state, "gateway")
-                answer_slot.markdown(reply)
-
-            state.model = stream_meta.get("model") or state.model
-            state.finish = stream_meta.get("finish")
-            state.gateway_buffered = bool(stream_meta.get("gateway_buffered"))
-            state.saw_content = bool(stream_meta.get("saw_content")) or state.saw_content
-            state.saw_reasoning = (
-                bool(stream_meta.get("saw_reasoning")) or state.saw_reasoning
-            )
-            if stream_meta.get("stream_path"):
-                state.stream_path = stream_meta["stream_path"]
-            if stream_meta.get("classify_ms") is not None:
-                state.classify_ms = stream_meta["classify_ms"]
-            if stream_meta.get("direct_error") and not state.fallback:
-                mark_fallback(state, str(stream_meta["direct_error"]))
-            mark_complete(state)
-            meta_line = caption_line(state)
-            st.caption(meta_line)
-            stored: dict[str, Any] = {
-                "role": "assistant",
-                "content": reply,
-                "meta": meta_line,
-            }
-            if reasoning_text.strip():
-                stored["reasoning"] = reasoning_text
-            st.session_state.messages.append(stored)
-            st.session_state.pg_request = state
-            _paint_flow()
-            st.rerun()
-        except Exception as exc:
-            status.empty()
-            mark_failed(state, str(exc))
-            st.session_state.pg_request = state
-            _paint_flow()
-            err = (
-                f"{exc} — check SR API (:8081) and AIM endpoints; "
-                "or run token-factory ports start"
-            )
-            st.error(err)
-            st.session_state.messages.append({"role": "assistant", "content": err})
+    if prompt:
+        st.session_state.pg_active_prompt = prompt
+        st.rerun()
