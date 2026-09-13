@@ -27,7 +27,13 @@ bash scripts/install-observability.sh
 
 ## Kind / local cluster
 
-Parent workflow creates the kind cluster. After install:
+```bash
+bash scripts/00-kind-cluster.sh --name token-factory
+```
+
+**Important:** The kind config does **not** map hostPort 8080 (reserved for `kubectl port-forward` to the AI Gateway). Optional high ports 30080/30090 only.
+
+After install:
 
 ```bash
 make ports    # tracked port-forwards (8080, 8081, 8700, 3000, 9090)

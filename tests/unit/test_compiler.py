@@ -30,6 +30,9 @@ def test_compile_outputs(tmp_path):
     assert "AIServiceBackend" in kinds
     assert "ClientTrafficPolicy" in kinds
     assert "ReferenceGrant" in kinds
+    assert "BackendTrafficPolicy" in kinds
+    btp = [m for m in manifests if m["kind"] == "BackendTrafficPolicy"]
+    assert btp[0]["spec"]["healthCheck"]["active"]["http"]["path"] == "/v1/models"
     extproc = next(m for m in manifests if m["kind"] == "EnvoyPatchPolicy")
     assert len(extproc["spec"]["jsonPatches"]) == 2
     cluster_patch = extproc["spec"]["jsonPatches"][1]

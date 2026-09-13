@@ -6,12 +6,20 @@ source "${SCRIPT_DIR}/lib/wait.sh"
 
 AIGW_VERSION="${AIGW_VERSION:-v0.4.0}"
 
+# WHY server-side apply fallback: same Helm Secret size limit as EG CRDs.
 step "Install Envoy AI Gateway CRDs (${AIGW_VERSION})"
-helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm \
+kubectl create namespace envoy-ai-gateway-system --dry-run=client -o yaml | kubectl apply -f -
+if ! helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm \
   --version "${AIGW_VERSION}" \
   --namespace envoy-ai-gateway-system \
   --create-namespace \
-  --timeout 120s
+  --timeout 120s 2>/tmp/aieg-crd-helm.err; then
+  warn "Helm release for aieg-crd failed; applying CRDs via server-side apply"
+  cat /tmp/aieg-crd-helm.err >&2 || true
+  helm template aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm \
+    --version "${AIGW_VERSION}" \
+    | kubectl apply --server-side --force-conflicts -f -
+fi
 
 step "Install Envoy AI Gateway controller (${AIGW_VERSION})"
 helm upgrade -i aieg oci://docker.io/envoyproxy/ai-gateway-helm \

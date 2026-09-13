@@ -16,7 +16,8 @@ policy:
       domains:
         - computer science
       endpoint_ref: gpt-oss-120b-coding
-      lora_name: coding-expert
+      # lora_name must equal the backend-accepted model id (AIGW override gap).
+      lora_name: openai/gpt-oss-120b
       use_reasoning: false
       model_card: coding-model
 
@@ -32,7 +33,7 @@ policy:
         - chemistry
         - engineering
       endpoint_ref: gpt-oss-120b-coding
-      lora_name: math-expert
+      lora_name: openai/gpt-oss-120b
       use_reasoning: true
       model_card: coding-model
 
@@ -48,7 +49,7 @@ policy:
         - psychology
         - other
       endpoint_ref: gpt-oss-20b-general
-      lora_name: general-expert
+      lora_name: openai/gpt-oss-20b
       use_reasoning: false
       model_card: fast-model
 

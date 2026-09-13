@@ -38,4 +38,18 @@ helm upgrade -i semantic-router oci://ghcr.io/vllm-project/charts/semantic-route
 wait_deploy "${NS}" semantic-router 600s
 kubectl get deploy -n "${NS}" semantic-router-dashboard &>/dev/null && \
   wait_deploy "${NS}" semantic-router-dashboard 180s || warn "Dashboard deployment not found yet"
+
+# WHY: chart 0.3.0 dashboard pods share selectorLabels with the router Service,
+# so gRPC :50051 endpoints intermittently include the dashboard (connection refused).
+# UPSTREAM: https://github.com/vllm-project/semantic-router/issues/3751 (related
+# discoverability); selector split is a chart hygiene issue.
+# WHEN IT CAN BE REMOVED: when the chart gives the router Service a component selector
+# that excludes app.kubernetes.io/component=dashboard.
+step "Pin Semantic Router Service selector to router pods only"
+kubectl patch deployment semantic-router -n "${NS}" --type strategic \
+  -p '{"spec":{"template":{"metadata":{"labels":{"token-factory.amd.com/role":"router"}}}}}'
+kubectl rollout status deployment/semantic-router -n "${NS}" --timeout=300s
+kubectl patch svc semantic-router -n "${NS}" --type strategic \
+  -p '{"spec":{"selector":{"app":"semantic-router","app.kubernetes.io/instance":"semantic-router","app.kubernetes.io/name":"semantic-router","token-factory.amd.com/role":"router"}}}'
+
 success "Semantic Router ready (dashboard.enabled=true, port 8700)"

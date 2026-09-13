@@ -12,11 +12,11 @@ policy:
       priority: 10
       domains: [computer science]
       endpoint_ref: gpt-oss-120b-coding
-      lora_name: coding-expert
+      lora_name: openai/gpt-oss-120b
       model_card: coding-model
     - name: general_route
       priority: 5
       domains: [business, history, economics, law, philosophy, psychology, other]
       endpoint_ref: gpt-oss-120b-coding
-      lora_name: general-expert
+      lora_name: openai/gpt-oss-120b
       model_card: coding-model

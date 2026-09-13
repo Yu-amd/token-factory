@@ -151,6 +151,7 @@ CI (`.github/workflows/ci.yml`): ruff, pytest, compile, Helm template dashboard 
 
 ## Documentation
 
+- [BUILD_REPORT.md](BUILD_REPORT.md) — V1 verified status, routing tests, workarounds
 - [Configuration](docs/configuration.md)
 - [Deployment](docs/deployment.md)
 - [Semantic Router Dashboard](docs/semantic-router-dashboard.md)

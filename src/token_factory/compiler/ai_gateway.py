@@ -14,11 +14,50 @@ LISTENER_TYPE = "type.googleapis.com/envoy.config.listener.v3.Listener"
 
 
 def _backend_manifest(name: str, host: str, port: int, namespace: str) -> dict[str, Any]:
+    # Use fqdn for DNS names, ip for literal addresses.
+    endpoint: dict[str, Any]
+    parts = host.split(".")
+    is_ipv4 = len(parts) == 4 and all(p.isdigit() for p in parts)
+    if is_ipv4:
+        endpoint = {"ip": {"address": host, "port": port}}
+    else:
+        endpoint = {"fqdn": {"hostname": host, "port": port}}
     return {
         "apiVersion": "gateway.envoyproxy.io/v1alpha1",
         "kind": "Backend",
         "metadata": {"name": name, "namespace": namespace},
-        "spec": {"endpoints": [{"ip": {"address": host, "port": port}}]},
+        "spec": {"endpoints": [endpoint]},
+    }
+
+
+def _backend_traffic_policy(backend_name: str, namespace: str) -> dict[str, Any]:
+    return {
+        "apiVersion": "gateway.envoyproxy.io/v1alpha1",
+        "kind": "BackendTrafficPolicy",
+        "metadata": {"name": f"health-{backend_name}", "namespace": namespace},
+        "spec": {
+            "targetRefs": [
+                {
+                    "group": "gateway.envoyproxy.io",
+                    "kind": "Backend",
+                    "name": backend_name,
+                }
+            ],
+            "healthCheck": {
+                "active": {
+                    "type": "HTTP",
+                    "http": {"path": "/v1/models", "method": "GET"},
+                    "interval": "10s",
+                    "timeout": "3s",
+                    "unhealthyThreshold": 3,
+                    "healthyThreshold": 1,
+                }
+            },
+            "retry": {
+                "numRetries": 2,
+                "perRetry": {"backOff": {"baseInterval": "100ms"}},
+            },
+        },
     }
 
 
@@ -131,6 +170,40 @@ def compile_ai_gateway_manifests(
     gateway_ns = cluster.get("gateway_namespace", "token-factory")
     manifests: list[dict[str, Any]] = []
 
+    # EnvoyProxy with ClusterIP — kind/local clusters often lack LoadBalancer.
+    # WHY: Gateway stays Programmed=False without an address on kind.
+    # UPSTREAM: Envoy Gateway EnvoyProxy provider.kubernetes.envoyService.type
+    # WHEN IT CAN BE REMOVED: when deploying with MetalLB/cloud LB by default.
+    manifests.append(
+        {
+            "apiVersion": "gateway.envoyproxy.io/v1alpha1",
+            "kind": "EnvoyProxy",
+            "metadata": {"name": "token-factory-proxy", "namespace": gateway_ns},
+            "spec": {
+                "provider": {
+                    "type": "Kubernetes",
+                    "kubernetes": {"envoyService": {"type": "ClusterIP"}},
+                }
+            },
+        }
+    )
+    manifests.append(
+        {
+            "apiVersion": "gateway.networking.k8s.io/v1",
+            "kind": "GatewayClass",
+            "metadata": {"name": "envoy"},
+            "spec": {
+                "controllerName": "gateway.envoyproxy.io/gatewayclass-controller",
+                "parametersRef": {
+                    "group": "gateway.envoyproxy.io",
+                    "kind": "EnvoyProxy",
+                    "name": "token-factory-proxy",
+                    "namespace": gateway_ns,
+                },
+            },
+        }
+    )
+
     manifests.append(
         {
             "apiVersion": "gateway.networking.k8s.io/v1",
@@ -147,35 +220,72 @@ def compile_ai_gateway_manifests(
         ep["id"]: ep for ep in endpoints.get("endpoints", []) if ep.get("enabled", True)
     }
     routes = policies.get("policy", {}).get("routes", [])
+    fallback_chain = (
+        policies.get("policy", {}).get("fallback", {}).get("chain", [])
+        if policies.get("policy", {}).get("fallback", {}).get("enabled", True)
+        else []
+    )
 
-    for route in routes:
-        ep = endpoint_map.get(route["endpoint_ref"])
-        if not ep:
+    emitted_backends: set[str] = set()
+    for ep in endpoint_map.values():
+        backend_name = f"backend-{ep['id']}"
+        if backend_name in emitted_backends:
             continue
-        backend_name = route.get("backend_name") or f"backend-{route['endpoint_ref']}"
+        emitted_backends.add(backend_name)
         manifests.append(_backend_manifest(backend_name, ep["host"], ep["port"], gateway_ns))
         manifests.append(_aiservice_backend(backend_name, gateway_ns))
+        manifests.append(_backend_traffic_policy(backend_name, gateway_ns))
 
-    aigw_rules = []
+    # Merge routes that share the same x-ai-eg-model match key.
+    rules_by_model: dict[str, dict[str, Any]] = {}
     for route in routes:
         ep = endpoint_map.get(route["endpoint_ref"])
         if not ep:
             continue
-        lora = route.get("lora_name") or route["name"]
-        backend_name = route.get("backend_name") or f"backend-{route['endpoint_ref']}"
-        aigw_rules.append(
+        route_model = route.get("lora_name") or ep["model"]
+        primary_name = f"backend-{ep['id']}"
+        backend_refs = [
             {
+                "name": primary_name,
+                "modelNameOverride": ep["model"],
+                "priority": 0,
+            }
+        ]
+        # Add policy fallback chain as higher Envoy priorities (failover).
+        priority = 1
+        for fb_id in fallback_chain:
+            if fb_id == route["endpoint_ref"]:
+                continue
+            fb_ep = endpoint_map.get(fb_id)
+            if not fb_ep:
+                continue
+            backend_refs.append(
+                {
+                    "name": f"backend-{fb_id}",
+                    "modelNameOverride": fb_ep["model"],
+                    "priority": priority,
+                }
+            )
+            priority += 1
+
+        if route_model not in rules_by_model:
+            rules_by_model[route_model] = {
                 "matches": [
                     {
                         "headers": [
-                            {"type": "Exact", "name": "x-ai-eg-model", "value": lora},
+                            {
+                                "type": "Exact",
+                                "name": "x-ai-eg-model",
+                                "value": route_model,
+                            },
                         ]
                     }
                 ],
-                "backendRefs": [{"name": backend_name, "modelNameOverride": ep["model"]}],
+                "backendRefs": backend_refs,
                 "timeouts": {"request": "120s", "backendRequest": "120s"},
             }
-        )
+
+    aigw_rules = list(rules_by_model.values())
 
     manifests.append(
         {

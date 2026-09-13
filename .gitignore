@@ -15,8 +15,10 @@ htmlcov/
 
 # Token Factory runtime
 .token-factory/
+**/.cache/token-factory/
 generated/
 *.local.yaml
+*.egg-info/
 
 # Environment
 .env
