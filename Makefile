@@ -19,7 +19,7 @@ help:
 	@echo "  status               CLI health checks"
 	@echo "  dashboard            Port-forward + verify SR dashboard"
 	@echo "  ports                Start tracked port-forwards (:18080 gateway, :8081 SR API, …)"
-	@echo "  ui                   Launch Streamlit UI (Playground, Automated Demo, Matrix, …)"
+	@echo "  ui                   Launch Streamlit UI + demo metrics server (:9108/metrics)"
 	@echo "  smoke-ui             Smoke-test Playground streaming path"
 	@echo "  recommend            AMD Opinionated Routing (USE_CASE=… OBJECTIVE=…; see token-factory recommend -h)"
 	@echo "  logs                 Tail semantic-router logs"

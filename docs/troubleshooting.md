@@ -70,4 +70,8 @@ Prometheus needs RBAC + Envoy `/stats/prometheus:19001` scrape. Re-apply:
 bash scripts/install-observability.sh
 ```
 
+For **Automated Demo** panels: keep `make ui` running (starts `:9108/metrics`), confirm
+Prometheus target `token-factory-demo` is UP, and open the *Token Factory Automated Demo*
+dashboard (`token_factory_demo_*` — not an SR intent placeholder).
+
 See [observability.md](observability.md).

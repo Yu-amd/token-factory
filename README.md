@@ -29,7 +29,9 @@ token-factory demo run --pack executive --mock
 token-factory demo run --pack smoke --ci --mock     # exit 0 on policy PASS
 ```
 
-Validates classification, AMD canonical policy eligibility, lifecycle, capability, route/endpoint selection, fallback injection, and telemetry attributes. Latency may be recorded as telemetry only — never as comparative hardware claims. Details: [docs/automated-demo.md](docs/automated-demo.md).
+Validates classification, AMD canonical policy eligibility, lifecycle, capability, route/endpoint selection, fallback injection, and telemetry attributes. Latency may be recorded as telemetry only — never as comparative hardware claims.
+
+Demo counters (`token_factory_demo_*`) are served on **`:9108/metrics`** (`make ui` starts the metrics server; Prometheus job `token-factory-demo` scrapes it). Grafana **Token Factory Automated Demo** panels use those series — no SR intent placeholder. Details: [docs/automated-demo.md](docs/automated-demo.md), [docs/observability.md](docs/observability.md).
 
 ## AMD Opinionated Routing
 
