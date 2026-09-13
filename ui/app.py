@@ -409,36 +409,38 @@ def section(
     hero: bool = False,
     meta: list[tuple[str, str]] | None = None,
 ) -> None:
+    card_cls = "tf-card tf-card-hero" if hero else "tf-card"
+    pad = "2.35rem 2.25rem 2.1rem" if hero else "1.75rem 1.85rem"
+    title_size = "1.65rem" if hero else "1.35rem"
+    sub_size = "1.05rem" if hero else "0.95rem"
+    eye_gap = "1.25rem" if hero else "1.05rem"
+    title_gap = "1.25rem" if hero else "1.05rem"
     meta_html = ""
     if meta:
         items = "".join(
-            "<div class='tf-meta-item' style='display:flex;flex-direction:column;gap:0.5rem;min-width:14rem;'>"
+            "<div class='tf-meta-item' style='display:flex;flex-direction:column;gap:0.55rem;min-width:14rem;'>"
             f"<span class='tf-meta-label' style='font-size:0.68rem;letter-spacing:0.1em;"
             f"text-transform:uppercase;color:#666;font-weight:500;'>{label}</span>"
             f"<span class='tf-meta-value' style='font-family:IBM Plex Mono,ui-monospace,monospace;"
-            f"font-size:0.88rem;color:#8fd400;line-height:1.45;'>{value}</span>"
+            f"font-size:0.9rem;color:#8fd400;line-height:1.5;'>{value}</span>"
             "</div>"
             for label, value in meta
         )
         meta_html = (
-            "<div class='tf-meta' style='display:flex;flex-wrap:wrap;gap:1.25rem 2.5rem;"
-            "margin-top:1.6rem;padding-top:1.4rem;border-top:1px solid #333;'>"
+            "<div class='tf-meta' style='display:flex;flex-wrap:wrap;gap:1.5rem 3rem;"
+            "margin-top:1.85rem;padding-top:1.55rem;border-top:1px solid #333;'>"
             f"{items}</div>"
         )
-    card_cls = "tf-card tf-card-hero" if hero else "tf-card"
-    pad = "2rem 2rem 1.9rem" if hero else "1.6rem 1.75rem"
-    title_size = "1.55rem" if hero else "1.35rem"
-    sub_size = "1.02rem" if hero else "0.95rem"
     html(
         f"""
         <div class="{card_cls}" style="background:#141414;border:1px solid #333;border-radius:0.625rem;
-          padding:{pad};margin:0 0 1.75rem 0;">
+          padding:{pad};margin:0 0 1.85rem 0;">
           <p class="tf-eyebrow" style="font-size:0.72rem;letter-spacing:0.14em;text-transform:uppercase;
-            color:#666;margin:0 0 1.05rem 0;font-weight:500;line-height:1.4;">{eyebrow}</p>
-          <h2 class="tf-h2" style="margin:0 0 1.05rem 0;font-size:{title_size};font-weight:650;
+            color:#666;margin:0 0 {eye_gap} 0;font-weight:500;line-height:1.4;">{eyebrow}</p>
+          <h2 class="tf-h2" style="margin:0 0 {title_gap} 0;font-size:{title_size};font-weight:650;
             letter-spacing:-0.02em;color:#e8e8e8;line-height:1.35;">{title}</h2>
-          <p class="tf-sub" style="margin:0;color:#999;font-size:{sub_size};line-height:1.75;
-            max-width:44rem;">{subtitle}</p>
+          <p class="tf-sub" style="margin:0;color:#a3a3a3;font-size:{sub_size};line-height:1.8;
+            max-width:40rem;">{subtitle}</p>
           {meta_html}
         </div>
         """
