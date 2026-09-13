@@ -20,7 +20,7 @@ for cmd in helm kubectl; do
 done
 
 step "Token Factory install — pinned versions"
-info "Semantic Router chart: 0.3.0 | AIGW: v0.3.0 | EG: v1.2.3"
+info "Semantic Router chart: 0.3.0 | AIGW: v0.4.0 | EG: v1.6.0"
 
 "${SCRIPT_DIR}/install-envoy-gateway.sh"
 "${SCRIPT_DIR}/install-envoy-ai-gateway.sh"

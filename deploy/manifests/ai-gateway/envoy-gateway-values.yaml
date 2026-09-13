@@ -1,5 +1,16 @@
-# Pinned Envoy Gateway values for AI Gateway v0.3.0 integration
-# Source: envoyproxy/ai-gateway manifests/envoy-gateway-values.yaml
+# Pinned from envoyproxy/ai-gateway tag v0.4.0 (NOT main):
+#   https://github.com/envoyproxy/ai-gateway/blob/v0.4.0/manifests/envoy-gateway-values.yaml
+#
+# WHY v0.4.0 tag: matches Semantic Router upstream e2e (EG v1.6.0 + AIGW v0.4.0).
+# The main branch values may drift ahead of our pinned Helm releases and break
+# extensionManager FQDN / hook settings needed for AIServiceBackend routing.
+#
+# Install with gateway-helm and gateway-crds-helm both at v1.6.0:
+#   helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
+#     --version v1.6.0 -f deploy/manifests/ai-gateway/envoy-gateway-values.yaml
+
+# Copyright Envoy AI Gateway Authors
+# SPDX-License-Identifier: Apache-2.0
 
 config:
   envoyGateway:

@@ -5,7 +5,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/lib/colors.sh"
 source "${SCRIPT_DIR}/lib/wait.sh"
 
-EG_VERSION="${EG_VERSION:-v1.2.3}"
+EG_VERSION="${EG_VERSION:-v1.6.0}"
 EG_VALUES="${REPO_ROOT}/deploy/manifests/ai-gateway/envoy-gateway-values.yaml"
 
 step "Install Gateway API + Envoy Gateway CRDs (${EG_VERSION})"

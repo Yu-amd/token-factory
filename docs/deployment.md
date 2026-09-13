@@ -5,8 +5,8 @@
 | Component | Version |
 |-----------|---------|
 | vLLM Semantic Router chart | **0.3.0** (dashboard enabled, port **8700**) |
-| Envoy AI Gateway | **v0.3.0** (AIServiceBackend + AIGatewayRoute) |
-| Envoy Gateway | **v1.2.3** |
+| Envoy AI Gateway | **v0.4.0** (AIServiceBackend + AIGatewayRoute) |
+| Envoy Gateway + gateway-crds-helm | **v1.6.0** |
 | Prometheus | v2.55.1 |
 | Grafana | 11.4.0 |
 

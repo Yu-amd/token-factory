@@ -22,12 +22,18 @@ def test_compile_outputs(tmp_path):
     assert sr["dashboard"]["enabled"] is True
     assert sr["dashboard"]["service"]["port"] == 8700
     assert sr["config"]["version"] == "v0.3"
-    assert len(sr["config"]["routing"]["decisions"]) >= 2
+    assert len(sr["config"]["routing"]["decisions"]) >= 3
 
     manifests = list(yaml.safe_load_all(outputs["ai_gateway_manifests"].read_text()))
     kinds = {m["kind"] for m in manifests}
     assert "AIGatewayRoute" in kinds
     assert "AIServiceBackend" in kinds
+    assert "ClientTrafficPolicy" in kinds
+    assert "ReferenceGrant" in kinds
+    extproc = next(m for m in manifests if m["kind"] == "EnvoyPatchPolicy")
+    assert len(extproc["spec"]["jsonPatches"]) == 2
+    cluster_patch = extproc["spec"]["jsonPatches"][1]
+    assert cluster_patch["operation"]["value"]["type"] == "STRICT_DNS"
 
     ui = __import__("json").loads(outputs["ui_metadata"].read_text())
     assert ui["virtual_model"] == "token-factory/auto"

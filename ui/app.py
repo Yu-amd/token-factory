@@ -82,7 +82,7 @@ Client → Envoy AI Gateway → vLLM Semantic Router (extproc)
               │                        │
               │                        ├─ coding-expert → GPT-OSS 120B (Instinct)
               │                        └─ general-expert → GPT-OSS 20B (Instinct)
-              └─ AIServiceBackend / AIGatewayRoute (v0.3.0 CRDs)
+              └─ AIServiceBackend / AIGatewayRoute (AIGW v0.4.0 CRDs)
         """,
         language="text",
     )

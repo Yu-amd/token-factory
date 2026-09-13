@@ -17,6 +17,10 @@ Policies live under `policies/` and define how Semantic Router classifies reques
 
 Semantic Router v0.3 uses fixed classifier domains (e.g. `computer science`, `business`, `other`). Each route maps domains → endpoint via `endpoint_ref` and exposes a LoRA name for AI Gateway header matching.
 
+## Reasoning / STEM fallback
+
+When no dedicated reasoning AIM endpoint is configured, the `reasoning_route` (domains: math, physics, chemistry, engineering) falls back to the **coding endpoint** (`gpt-oss-120b-coding` on MI300X). Enable `mock-reasoning` or add a dedicated endpoint in `endpoints.yaml` to override.
+
 ## Fallback
 
 `policy.fallback.chain` lists endpoint IDs tried in order when primary backend is unavailable. Eligibility is checked against `catalog/aims.yaml`.

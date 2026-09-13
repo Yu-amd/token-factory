@@ -1,8 +1,16 @@
-"""Compile Envoy AI Gateway manifests (v0.3.0 CRDs)."""
+"""Compile Envoy AI Gateway manifests (AIGW v0.4.0 — AIServiceBackend/AIGatewayRoute)."""
 
 from __future__ import annotations
 
 from typing import Any
+
+SR_NAMESPACE = "vllm-semantic-router-system"
+SR_GRPC_HOST = f"semantic-router.{SR_NAMESPACE}.svc.cluster.local"
+EXT_PROC_TYPE = (
+    "type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor"
+)
+CLUSTER_TYPE = "type.googleapis.com/envoy.config.cluster.v3.Cluster"
+LISTENER_TYPE = "type.googleapis.com/envoy.config.listener.v3.Listener"
 
 
 def _backend_manifest(name: str, host: str, port: int, namespace: str) -> dict[str, Any]:
@@ -30,6 +38,89 @@ def _aiservice_backend(name: str, namespace: str) -> dict[str, Any]:
     }
 
 
+def _extproc_patch(gateway_ns: str, gateway_name: str) -> dict[str, Any]:
+    return {
+        "apiVersion": "gateway.envoyproxy.io/v1alpha1",
+        "kind": "EnvoyPatchPolicy",
+        "metadata": {"name": "ai-gateway-prepost-extproc-patch-policy", "namespace": gateway_ns},
+        "spec": {
+            "targetRef": {
+                "group": "gateway.networking.k8s.io",
+                "kind": "Gateway",
+                "name": gateway_name,
+            },
+            "type": "JSONPatch",
+            "jsonPatches": [
+                {
+                    "name": f"{gateway_ns}/{gateway_name}/http",
+                    "type": LISTENER_TYPE,
+                    "operation": {
+                        "op": "add",
+                        "path": "/default_filter_chain/filters/0/typed_config/http_filters/0",
+                        "value": {
+                            "name": "semantic-router-extproc",
+                            "typedConfig": {
+                                "@type": EXT_PROC_TYPE,
+                                "allow_mode_override": True,
+                                "grpcService": {
+                                    "envoyGrpc": {
+                                        "authority": f"semantic-router.{SR_NAMESPACE}:50051",
+                                        "clusterName": "semantic-router",
+                                    },
+                                    "timeout": "60s",
+                                },
+                                "message_timeout": "60s",
+                                "processing_mode": {
+                                    "request_body_mode": "BUFFERED",
+                                    "request_header_mode": "SEND",
+                                    "request_trailer_mode": "SKIP",
+                                    "response_body_mode": "NONE",
+                                    "response_header_mode": "SEND",
+                                    "response_trailer_mode": "SKIP",
+                                },
+                            },
+                        },
+                    },
+                },
+                {
+                    "name": "semantic-router",
+                    "type": CLUSTER_TYPE,
+                    "operation": {
+                        "op": "add",
+                        "path": "",
+                        "value": {
+                            "name": "semantic-router",
+                            "type": "STRICT_DNS",
+                            "connect_timeout": "60s",
+                            "http2_protocol_options": {},
+                            "lb_policy": "ROUND_ROBIN",
+                            "load_assignment": {
+                                "cluster_name": "semantic-router",
+                                "endpoints": [
+                                    {
+                                        "lb_endpoints": [
+                                            {
+                                                "endpoint": {
+                                                    "address": {
+                                                        "socket_address": {
+                                                            "address": SR_GRPC_HOST,
+                                                            "port_value": 50051,
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ],
+                            },
+                        },
+                    },
+                },
+            ],
+        },
+    }
+
+
 def compile_ai_gateway_manifests(
     endpoints: dict[str, Any],
     policies: dict[str, Any],
@@ -52,16 +143,16 @@ def compile_ai_gateway_manifests(
         }
     )
 
-    endpoint_map = {ep["id"]: ep for ep in endpoints.get("endpoints", []) if ep.get("enabled", True)}
+    endpoint_map = {
+        ep["id"]: ep for ep in endpoints.get("endpoints", []) if ep.get("enabled", True)
+    }
     routes = policies.get("policy", {}).get("routes", [])
-    backend_names: dict[str, str] = {}
 
     for route in routes:
         ep = endpoint_map.get(route["endpoint_ref"])
         if not ep:
             continue
         backend_name = route.get("backend_name") or f"backend-{route['endpoint_ref']}"
-        backend_names[route.get("lora_name") or route["name"]] = backend_name
         manifests.append(_backend_manifest(backend_name, ep["host"], ep["port"], gateway_ns))
         manifests.append(_aiservice_backend(backend_name, gateway_ns))
 
@@ -77,17 +168,11 @@ def compile_ai_gateway_manifests(
                 "matches": [
                     {
                         "headers": [
-                            {
-                                "type": "Exact",
-                                "name": "x-ai-eg-model",
-                                "value": lora,
-                            }
+                            {"type": "Exact", "name": "x-ai-eg-model", "value": lora},
                         ]
                     }
                 ],
-                "backendRefs": [
-                    {"name": backend_name, "modelNameOverride": ep["model"]},
-                ],
+                "backendRefs": [{"name": backend_name, "modelNameOverride": ep["model"]}],
                 "timeouts": {"request": "120s", "backendRequest": "120s"},
             }
         )
@@ -99,59 +184,68 @@ def compile_ai_gateway_manifests(
             "metadata": {"name": gateway_name, "namespace": gateway_ns},
             "spec": {
                 "parentRefs": [
-                    {
-                        "name": gateway_name,
-                        "kind": "Gateway",
-                        "group": "gateway.networking.k8s.io",
-                    }
+                    {"name": gateway_name, "kind": "Gateway", "group": "gateway.networking.k8s.io"},
                 ],
                 "rules": aigw_rules,
             },
         }
     )
 
+    manifests.append(_extproc_patch(gateway_ns, gateway_name))
+
     manifests.append(
         {
             "apiVersion": "gateway.envoyproxy.io/v1alpha1",
-            "kind": "EnvoyPatchPolicy",
-            "metadata": {"name": "semantic-router-extproc", "namespace": gateway_ns},
+            "kind": "ClientTrafficPolicy",
+            "metadata": {"name": "large-buffer", "namespace": gateway_ns},
             "spec": {
-                "targetRef": {
-                    "group": "gateway.networking.k8s.io",
-                    "kind": "Gateway",
-                    "name": gateway_name,
-                },
-                "type": "JSONPatch",
-                "jsonPatches": [
+                "targetRefs": [
+                    {"group": "gateway.networking.k8s.io", "kind": "Gateway", "name": gateway_name},
+                ],
+                "connection": {"bufferLimit": "32Mi"},
+            },
+        }
+    )
+
+    manifests.append(
+        {
+            "apiVersion": "gateway.networking.k8s.io/v1",
+            "kind": "HTTPRoute",
+            "metadata": {"name": "token-factory-health", "namespace": gateway_ns},
+            "spec": {
+                "parentRefs": [{"name": gateway_name}],
+                "rules": [
                     {
-                        "name": f"{gateway_ns}/{gateway_name}/http",
-                        "type": "type.googleapis.com/envoy.config.listener.v3.Listener",
-                        "operation": {
-                            "op": "add",
-                            "path": "/default_filter_chain/filters/0/typed_config/http_filters/0",
-                            "value": {
-                                "name": "semantic-router-extproc",
-                                "typedConfig": {
-                                    "@type": (
-                                        "type.googleapis.com/envoy.extensions.filters.http"
-                                        ".ext_proc.v3.ExternalProcessor"
-                                    ),
-                                    "grpcService": {
-                                        "envoyGrpc": {
-                                            "authority": "semantic-router.vllm-semantic-router-system:50051",
-                                            "clusterName": "semantic-router",
-                                        },
-                                        "timeout": "60s",
-                                    },
-                                    "processing_mode": {
-                                        "request_body_mode": "BUFFERED",
-                                        "request_header_mode": "SEND",
-                                    },
-                                },
-                            },
-                        },
+                        "matches": [{"path": {"type": "PathPrefix", "value": "/health"}}],
+                        "backendRefs": [
+                            {
+                                "name": "semantic-router",
+                                "namespace": SR_NAMESPACE,
+                                "port": 8080,
+                                "kind": "Service",
+                                "group": "",
+                            }
+                        ],
                     }
                 ],
+            },
+        }
+    )
+
+    manifests.append(
+        {
+            "apiVersion": "gateway.networking.k8s.io/v1beta1",
+            "kind": "ReferenceGrant",
+            "metadata": {"name": "allow-token-factory-to-sr", "namespace": SR_NAMESPACE},
+            "spec": {
+                "from": [
+                    {
+                        "group": "gateway.networking.k8s.io",
+                        "kind": "HTTPRoute",
+                        "namespace": gateway_ns,
+                    }
+                ],
+                "to": [{"group": "", "kind": "Service"}],
             },
         }
     )

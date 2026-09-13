@@ -14,7 +14,7 @@ help:
 	@echo "  test                 Run unit tests"
 	@echo "  demo                 Compile + run mock backend locally"
 	@echo "  status               CLI health checks"
-	@echo "  dashboard / grafana  Print service URLs"
+	@echo "  dashboard            Port-forward + verify SR dashboard"
 	@echo "  ports                Start tracked port-forwards"
 	@echo "  ui                   Launch Streamlit UI"
 	@echo "  logs                 Tail semantic-router logs"

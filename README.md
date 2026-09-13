@@ -1,6 +1,6 @@
 # AMD Token Factory
 
-Reference architecture for **config-driven Mixture-of-Models (MoM)** inference on AMD compute (Instinct, EPYC, Radeon) using [vLLM Semantic Router v0.3](https://github.com/vllm-project/semantic-router) and [Envoy AI Gateway v0.3.0](https://github.com/envoyproxy/ai-gateway).
+Reference architecture for **config-driven Mixture-of-Models (MoM)** inference on AMD compute (Instinct, EPYC, Radeon) using [vLLM Semantic Router v0.3](https://github.com/vllm-project/semantic-router) and [Envoy AI Gateway v0.4.0](https://github.com/envoyproxy/ai-gateway).
 
 Repository: https://github.com/Yu-amd/token-factory
 
@@ -8,7 +8,7 @@ Repository: https://github.com/Yu-amd/token-factory
 
 - **Single virtual model**: `token-factory/auto`
 - **Single source of truth**: `endpoints.yaml` + `policies.yaml` + `catalog/aims.yaml` → compiler → `generated/`
-- **Pinned stack**: SR chart 0.3.0 (dashboard **enabled**, port **8700**), AIGW v0.3.0, Envoy Gateway v1.2.3
+- **Pinned stack**: SR chart 0.3.0 (dashboard **enabled**, port **8700**), AIGW v0.4.0, Envoy Gateway v1.6.0
 - **Python CLI** (`token-factory`): preflight, compile, install, verify, ports, UI, route explain
 - **Policy profiles**: balanced, quality, cost-efficient, low-latency, edge-first, enterprise
 - **AIM catalog** from AMD Enterprise AI accelerator matrix
@@ -22,7 +22,7 @@ Repository: https://github.com/Yu-amd/token-factory
 Client (curl / Streamlit)
     │  model: token-factory/auto
     ▼
-Envoy AI Gateway (v0.3.0)     auth, rate limits, AIGatewayRoute
+Envoy AI Gateway (v0.4.0)     auth, rate limits, AIGatewayRoute
     │  extproc gRPC
     ▼
 vLLM Semantic Router (0.3.0)  domain classify → LoRA / x-ai-eg-model
@@ -79,8 +79,8 @@ curl -s http://localhost:8080/v1/chat/completions \
 |-----------|-----|
 | Semantic Router Helm chart | **0.3.0** (app v0.3.0) |
 | SR Dashboard | enabled, port **8700** |
-| Envoy AI Gateway | **v0.3.0** |
-| Envoy Gateway | **v1.2.3** |
+| Envoy AI Gateway | **v0.4.0** |
+| Envoy Gateway + gateway-crds-helm | **v1.6.0** |
 | Prometheus | v2.55.1 |
 | Grafana | 11.4.0 |
 | Python | ≥ 3.11 |

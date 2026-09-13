@@ -6,7 +6,7 @@ Reference demo: `/tmp/eai-sr-demo` (functional lessons only).
 
 | Pattern | Token Factory implementation |
 |---------|------------------------------|
-| AIGW v0.3.0 CRDs | `generated/ai-gateway-manifests.yaml` |
+| AIGW v0.4.0 CRDs | `generated/ai-gateway-manifests.yaml` |
 | SR extproc EnvoyPatchPolicy | Compiler emits patch policy |
 | `x-ai-eg-model` header routing | AIGatewayRoute rules per LoRA |
 | Dashboard port 8700 | `dashboard.enabled: true` in Helm values |
@@ -19,7 +19,7 @@ Reference demo: `/tmp/eai-sr-demo` (functional lessons only).
 | Hard-coded manifests | Config compiler from YAML |
 | `MoM` virtual model | `token-factory/auto` |
 | `default` namespace | `token-factory` namespace |
-| Latest Helm tags | Pinned 0.3.0 / v1.2.3 |
+| Latest Helm tags | Pinned SR 0.3.0 / AIGW v0.4.0 / EG v1.6.0 |
 | pkill/lsof port cleanup | PID-tracked port-forward manager |
 | Single demo values file | policies/ profiles + AIM catalog |
 

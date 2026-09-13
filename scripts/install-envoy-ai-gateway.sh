@@ -4,7 +4,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/colors.sh"
 source "${SCRIPT_DIR}/lib/wait.sh"
 
-AIGW_VERSION="${AIGW_VERSION:-v0.3.0}"
+AIGW_VERSION="${AIGW_VERSION:-v0.4.0}"
 
 step "Install Envoy AI Gateway CRDs (${AIGW_VERSION})"
 helm upgrade -i aieg-crd oci://docker.io/envoyproxy/ai-gateway-crds-helm \

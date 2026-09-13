@@ -14,6 +14,13 @@ policy:
       endpoint_ref: gpt-oss-120b-coding
       lora_name: coding-expert
       model_card: coding-model
+    - name: reasoning_route
+      priority: 9
+      domains: [math, physics, chemistry, engineering]
+      endpoint_ref: gpt-oss-120b-coding
+      lora_name: math-expert
+      use_reasoning: true
+      model_card: coding-model
     - name: general_route
       priority: 1
       domains: [business, history, economics, law, philosophy, psychology, other]

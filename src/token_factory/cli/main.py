@@ -6,6 +6,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,6 +14,7 @@ import httpx
 import typer
 import yaml
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from token_factory.catalog import load_catalog
@@ -26,7 +28,11 @@ from token_factory.config import (
 )
 from token_factory.runtime.paths import repo_root
 from token_factory.runtime.port_forward import (
+    dashboard_deployment_ready,
+    find_available_local_port,
     list_forwards,
+    resolve_dashboard_service,
+    start_dashboard_forward,
     start_forwards,
     stop_all,
 )
@@ -36,37 +42,105 @@ app = typer.Typer(name="token-factory", help="AMD Token Factory reference archit
 console = Console()
 
 
+def _probe(url: str, path: str) -> str:
+    try:
+        r = httpx.get(f"{url.rstrip('/')}{path}", timeout=3.0, follow_redirects=True)
+        return "ok" if r.status_code < 400 else f"HTTP {r.status_code}"
+    except Exception as exc:
+        return f"unreachable ({exc.__class__.__name__})"
+
+
 @app.command()
 def status() -> None:
     """Check health of stack components."""
-    endpoints = {
-        "AI Gateway": os.environ.get("TF_GATEWAY_URL", "http://localhost:8080"),
-        "Semantic Router API": os.environ.get("TF_SR_URL", "http://localhost:8081"),
-        "SR Dashboard": os.environ.get("TF_SR_DASHBOARD_URL", "http://localhost:8700"),
-        "Grafana": os.environ.get("TF_GRAFANA_URL", "http://localhost:3000"),
-        "Prometheus": os.environ.get("TF_PROMETHEUS_URL", "http://localhost:9090"),
-    }
+    gateway = os.environ.get("TF_GATEWAY_URL", "http://localhost:8080")
+    sr_api = os.environ.get("TF_SR_URL", "http://localhost:8081")
+    dashboard = os.environ.get("TF_SR_DASHBOARD_URL", "http://localhost:8700")
+    grafana = os.environ.get("TF_GRAFANA_URL", "http://localhost:3000")
+    prometheus = os.environ.get("TF_PROMETHEUS_URL", "http://localhost:9090")
+
+    probes = [
+        ("AI Gateway", gateway, "/v1/models"),
+        ("Semantic Router API", sr_api, "/health"),
+        ("SR Dashboard", dashboard, "/"),
+        ("Grafana", grafana, "/api/health"),
+        ("Prometheus", prometheus, "/-/healthy"),
+    ]
     table = Table(title="Token Factory Status")
     table.add_column("Component")
     table.add_column("URL")
     table.add_column("Health")
-    for name, url in endpoints.items():
-        health_path = "/health" if "9090" not in url else "/-/healthy"
-        try:
-            r = httpx.get(f"{url.rstrip('/')}{health_path}", timeout=3.0)
-            health = "ok" if r.status_code < 400 else f"HTTP {r.status_code}"
-        except Exception as exc:
-            health = f"unreachable ({exc.__class__.__name__})"
-        table.add_row(name, url, health)
+    for name, url, path in probes:
+        table.add_row(name, url, _probe(url, path))
     console.print(table)
 
 
 @app.command()
 def dashboard() -> None:
-    """Open Semantic Router dashboard URL."""
-    url = os.environ.get("TF_SR_DASHBOARD_URL", "http://localhost:8700")
-    console.print(f"Semantic Router dashboard: {url}")
-    console.print("Start port-forwards with: token-factory ports start")
+    """Discover SR dashboard, port-forward, and verify HTTP access."""
+    svc_name, remote_port = resolve_dashboard_service()
+    deploy_ok, deploy_msg = dashboard_deployment_ready()
+
+    try:
+        local_port, port_note = find_available_local_port(8700)
+    except RuntimeError as exc:
+        console.print(f"[red]ERROR:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    if not deploy_ok:
+        console.print(f"[yellow]WARN:[/yellow] {deploy_msg}")
+
+    entry = start_dashboard_forward(preferred_port=local_port)
+    url = f"http://localhost:{entry['local_port']}"
+
+    curl_ok = False
+    curl_detail = ""
+    for attempt in range(5):
+        try:
+            result = subprocess.run(
+                ["curl", "-sf", f"{url}/"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            curl_ok = result.returncode == 0
+            curl_detail = "curl -f / succeeded" if curl_ok else result.stderr.strip() or "curl failed"
+            if curl_ok:
+                break
+        except (subprocess.SubprocessError, FileNotFoundError):
+            try:
+                r = httpx.get(f"{url}/", timeout=5.0, follow_redirects=True)
+                curl_ok = r.status_code < 400
+                curl_detail = f"HTTP {r.status_code}"
+                if curl_ok:
+                    break
+            except Exception as exc:
+                curl_detail = str(exc)
+        time.sleep(0.5)
+
+    status_lines = [
+        f"Service:      {svc_name} (ns vllm-semantic-router-system:{remote_port})",
+        f"Deployment:   {'healthy' if deploy_ok else 'NOT READY'} — {deploy_msg}",
+        f"Local URL:    {url}",
+        f"Port-forward: pid {entry.get('pid')} (tracked)",
+        f"HTTP probe:   {'OK' if curl_ok else 'FAILED'} — {curl_detail}",
+    ]
+    if port_note := entry.get("port_note"):
+        status_lines.insert(3, f"Port note:    {port_note}")
+
+    console.print(
+        Panel(
+            "\n".join(status_lines),
+            title="Semantic Router Dashboard",
+            border_style="green" if curl_ok else "yellow",
+        )
+    )
+
+    if not curl_ok:
+        console.print("[red]Dashboard port-forward up but HTTP probe failed.[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"\nOpen: [bold cyan]{url}[/bold cyan]")
 
 
 @app.command()
@@ -87,7 +161,7 @@ def ports_start() -> None:
     for entry in started:
         console.print(
             f"Started {entry['name']}: localhost:{entry['local_port']} "
-            f"(pid {entry['pid']})"
+            f"(pid {entry['pid']}, svc {entry['service']})"
         )
 
 
