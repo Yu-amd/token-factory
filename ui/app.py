@@ -108,7 +108,7 @@ CSS = textwrap.dedent(
     }
     .tf-status {
       background: var(--tf-surface); border: 1px solid var(--tf-border);
-      border-radius: 0.5rem; padding: 0.85rem 0.95rem;
+      border-radius: 0.5rem; padding: 1rem 1.05rem;
       transition: border-color 0.15s ease;
     }
     .tf-status:hover { border-color: var(--tf-border-hover); }
@@ -131,23 +131,65 @@ CSS = textwrap.dedent(
 
     .tf-card {
       background: var(--tf-surface); border: 1px solid var(--tf-border);
-      border-radius: 0.5rem; padding: 1.25rem 1.35rem; margin-bottom: 0.85rem;
+      border-radius: 0.625rem; padding: 1.6rem 1.75rem; margin-bottom: 1.15rem;
+    }
+    .tf-card-hero {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      padding: 2rem 2rem 1.85rem;
+      margin-bottom: 1.75rem;
+    }
+    .tf-card-hero .tf-eyebrow {
+      font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--tf-faint); margin: 0 0 1rem !important; font-weight: 500;
+      line-height: 1.4;
+    }
+    .tf-card-hero .tf-h2 {
+      margin: 0 0 1rem !important; font-size: 1.55rem; font-weight: 650;
+      letter-spacing: -0.02em; color: var(--tf-text); line-height: 1.35;
+    }
+    .tf-card-hero .tf-sub {
+      margin: 0 !important; color: var(--tf-muted); font-size: 1rem;
+      line-height: 1.7; max-width: 44rem;
     }
     .tf-eyebrow {
-      font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase;
-      color: var(--tf-faint); margin: 0 0 0.35rem;
+      font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--tf-faint); margin: 0 0 0.85rem !important; font-weight: 500;
+      line-height: 1.4;
     }
     .tf-h2 {
-      margin: 0 0 0.35rem; font-size: 1.15rem; font-weight: 650;
-      letter-spacing: -0.015em; color: var(--tf-text);
+      margin: 0 0 0.85rem !important; font-size: 1.35rem; font-weight: 650;
+      letter-spacing: -0.02em; color: var(--tf-text); line-height: 1.35;
     }
     .tf-sub {
-      margin: 0; color: var(--tf-muted); font-size: 0.9rem; line-height: 1.45;
+      margin: 0 !important; color: var(--tf-muted); font-size: 0.95rem;
+      line-height: 1.65; max-width: 52rem;
+    }
+    .tf-meta {
+      display: flex; flex-wrap: wrap; gap: 1.25rem 2.5rem;
+      margin-top: 1.5rem !important; padding-top: 1.35rem !important;
+      border-top: 1px solid var(--tf-border);
+    }
+    .tf-meta-item {
+      display: flex; flex-direction: column; gap: 0.45rem; min-width: 14rem;
+    }
+    .tf-meta-label {
+      font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--tf-faint); font-weight: 500; line-height: 1.3;
+    }
+    .tf-meta-value {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.88rem; color: var(--tf-green-hi); line-height: 1.45;
     }
     .tf-mono {
       font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 0.82rem;
+      font-size: 0.84rem;
     }
+
+    /* Streamlit wraps st.html; neutralize collapsed spacing on wrappers */
+    [data-testid="stHtml"] { margin-bottom: 0 !important; }
+    [data-testid="stHtml"] > div { line-height: inherit; }
 
     .tf-route {
       display: grid; grid-template-columns: 1fr auto; gap: 0.5rem 1rem;
@@ -207,7 +249,8 @@ CSS = textwrap.dedent(
       font-family: "IBM Plex Sans", sans-serif !important;
       font-weight: 500 !important; color: var(--tf-muted) !important;
       background: transparent !important; border-radius: 999px !important;
-      padding: 0.4rem 0.9rem !important;
+      padding: 0.5rem 1.05rem !important;
+      margin-right: 0.2rem !important;
     }
     div[data-testid="stTabs"] button[aria-selected="true"] {
       color: var(--tf-green-hi) !important; background: var(--tf-green-dim) !important;
@@ -215,8 +258,8 @@ CSS = textwrap.dedent(
     div[data-testid="stTabs"] [data-baseweb="tab-highlight"],
     div[data-testid="stTabs"] [data-baseweb="tab-border"] { display: none !important; }
     div[data-testid="stTabs"] [role="tablist"] {
-      gap: 0.25rem; border-bottom: 1px solid var(--tf-border) !important;
-      padding-bottom: 0.5rem; margin-bottom: 0.75rem;
+      gap: 0.35rem; border-bottom: 1px solid var(--tf-border) !important;
+      padding-bottom: 0.65rem; margin-bottom: 1.15rem;
     }
 
     .stTextArea textarea, .stTextInput input,
@@ -251,7 +294,36 @@ CSS = textwrap.dedent(
 
     div[data-testid="stChatMessage"] {
       background: var(--tf-surface) !important; border: 1px solid var(--tf-border);
-      border-radius: 0.5rem; padding: 0.75rem 1rem; margin-bottom: 0.55rem;
+      border-radius: 0.625rem; padding: 1.15rem 1.35rem !important;
+      margin-bottom: 0.85rem !important;
+    }
+    div[data-testid="stChatMessage"] p {
+      line-height: 1.65 !important; margin-bottom: 0.75rem !important;
+      font-size: 0.98rem !important;
+    }
+    div[data-testid="stChatMessage"] p:last-child { margin-bottom: 0 !important; }
+    div[data-testid="stChatMessage"] h1,
+    div[data-testid="stChatMessage"] h2,
+    div[data-testid="stChatMessage"] h3 {
+      margin-top: 1.1rem !important; margin-bottom: 0.55rem !important;
+      line-height: 1.35 !important; letter-spacing: -0.015em;
+    }
+    div[data-testid="stChatMessage"] h1:first-child,
+    div[data-testid="stChatMessage"] h2:first-child,
+    div[data-testid="stChatMessage"] h3:first-child { margin-top: 0 !important; }
+    div[data-testid="stChatMessage"] ul, div[data-testid="stChatMessage"] ol {
+      margin: 0.55rem 0 0.85rem 1.1rem !important; line-height: 1.6 !important;
+    }
+    div[data-testid="stChatMessage"] li { margin-bottom: 0.35rem !important; }
+    [data-testid="stChatInput"] {
+      padding-top: 0.75rem !important; margin-top: 0.5rem !important;
+    }
+    [data-testid="stChatInput"] textarea {
+      min-height: 3.25rem !important; line-height: 1.5 !important;
+      padding: 0.85rem 1rem !important;
+    }
+    [data-testid="stCaptionContainer"] {
+      margin-top: 0.65rem !important; line-height: 1.5 !important;
     }
     div[data-testid="stDataFrame"] {
       border: 1px solid var(--tf-border); border-radius: 0.5rem; overflow: hidden;
@@ -329,13 +401,45 @@ def render_status(checks: list[tuple[str, str]]) -> None:
     html(f'<div class="tf-status-row">{"".join(tiles)}</div>')
 
 
-def section(eyebrow: str, title: str, subtitle: str) -> None:
+def section(
+    eyebrow: str,
+    title: str,
+    subtitle: str,
+    *,
+    hero: bool = False,
+    meta: list[tuple[str, str]] | None = None,
+) -> None:
+    meta_html = ""
+    if meta:
+        items = "".join(
+            "<div class='tf-meta-item' style='display:flex;flex-direction:column;gap:0.5rem;min-width:14rem;'>"
+            f"<span class='tf-meta-label' style='font-size:0.68rem;letter-spacing:0.1em;"
+            f"text-transform:uppercase;color:#666;font-weight:500;'>{label}</span>"
+            f"<span class='tf-meta-value' style='font-family:IBM Plex Mono,ui-monospace,monospace;"
+            f"font-size:0.88rem;color:#8fd400;line-height:1.45;'>{value}</span>"
+            "</div>"
+            for label, value in meta
+        )
+        meta_html = (
+            "<div class='tf-meta' style='display:flex;flex-wrap:wrap;gap:1.25rem 2.5rem;"
+            "margin-top:1.6rem;padding-top:1.4rem;border-top:1px solid #333;'>"
+            f"{items}</div>"
+        )
+    card_cls = "tf-card tf-card-hero" if hero else "tf-card"
+    pad = "2rem 2rem 1.9rem" if hero else "1.6rem 1.75rem"
+    title_size = "1.55rem" if hero else "1.35rem"
+    sub_size = "1.02rem" if hero else "0.95rem"
     html(
         f"""
-        <div class="tf-card">
-          <p class="tf-eyebrow">{eyebrow}</p>
-          <h2 class="tf-h2">{title}</h2>
-          <p class="tf-sub">{subtitle}</p>
+        <div class="{card_cls}" style="background:#141414;border:1px solid #333;border-radius:0.625rem;
+          padding:{pad};margin:0 0 1.75rem 0;">
+          <p class="tf-eyebrow" style="font-size:0.72rem;letter-spacing:0.14em;text-transform:uppercase;
+            color:#666;margin:0 0 1.05rem 0;font-weight:500;line-height:1.4;">{eyebrow}</p>
+          <h2 class="tf-h2" style="margin:0 0 1.05rem 0;font-size:{title_size};font-weight:650;
+            letter-spacing:-0.02em;color:#e8e8e8;line-height:1.35;">{title}</h2>
+          <p class="tf-sub" style="margin:0;color:#999;font-size:{sub_size};line-height:1.75;
+            max-width:44rem;">{subtitle}</p>
+          {meta_html}
         </div>
         """
     )
@@ -392,9 +496,13 @@ with tab_chat:
     section(
         "Playground",
         "Chat through the gateway",
-        f'Requests hit Envoy AI Gateway → Semantic Router → AIM backends. '
-        f'Model <span class="tf-mono">{VIRTUAL_MODEL}</span> · '
-        f'gateway <span class="tf-mono">{GATEWAY}</span>',
+        "Send a prompt to the virtual model. Envoy AI Gateway hands it to Semantic Router, "
+        "which classifies the domain and selects an AIM backend on Instinct / EPYC / Radeon.",
+        hero=True,
+        meta=[
+            ("Virtual model", VIRTUAL_MODEL),
+            ("Gateway", GATEWAY),
+        ],
     )
 
     for msg in st.session_state.messages:
