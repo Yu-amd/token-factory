@@ -150,6 +150,7 @@ def render_automated_demo_tab(
                 f"`{a.get('selected_model') or '—'} × {a.get('selected_compute') or '—'}`\n"
                 f"- Validation: **{req.overall().value}**"
                 + (" · fallback" if a.get("fallback_used") else "")
+                + (" · runtime escalation" if a.get("runtime_escalation") else "")
             )
             feed.append(
                 {
@@ -158,14 +159,16 @@ def render_automated_demo_tab(
                     "model": a.get("selected_model"),
                     "compute": a.get("selected_compute"),
                     "fallback": bool(a.get("fallback_used")),
+                    "escalation": bool(a.get("runtime_escalation")),
                 }
             )
             lines = []
             for item in feed[-24:]:
                 fb = " · fallback" if item["fallback"] else ""
+                esc = " · escalation" if item.get("escalation") else ""
                 lines.append(
                     f"`{item['status']}`  {item['name']}  ·  "
-                    f"{item['model'] or '—'} / {item['compute'] or '—'}{fb}"
+                    f"{item['model'] or '—'} / {item['compute'] or '—'}{fb}{esc}"
                 )
             feed_box.markdown("**Live feed**\n\n" + "\n\n".join(lines))
 
@@ -213,6 +216,8 @@ def render_automated_demo_tab(
               <div style="color:#fca5a5;">{summary.get('failed', 0)}</div></div>
             <div><div style="color:#666;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;">Fallbacks</div>
               <div style="color:#e8e8e8;">{summary.get('fallbacks', 0)}</div></div>
+            <div><div style="color:#666;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;">Runtime escalations</div>
+              <div style="color:#e8e8e8;">{summary.get('runtime_escalations', 0)}</div></div>
           </div>
           <p style="color:#666;font-size:0.78rem;margin:0.9rem 0 0;">
             Distributions below show routing coverage — not performance comparisons.
@@ -246,6 +251,7 @@ def render_automated_demo_tab(
                 "canonical": f"{can.get('model', '—')} × {can.get('compute', '—')}",
                 "runtime": f"{a.get('selected_model') or '—'} × {a.get('selected_compute') or '—'}",
                 "fallback": a.get("fallback_used"),
+                "runtime_escalation": a.get("runtime_escalation"),
                 "classification": (r.get("validation") or {}).get("classification"),
                 "policy": (r.get("validation") or {}).get("policy"),
                 "lifecycle": (r.get("validation") or {}).get("lifecycle"),
@@ -276,6 +282,7 @@ def render_automated_demo_tab(
                             "canonical_vs_runtime_reason",
                             "preferred_not_deployed",
                             "fallback_used",
+                            "runtime_escalation",
                             "selected_endpoint",
                             "explanation",
                         )
@@ -341,6 +348,9 @@ def _render_history_and_links(
                     "passed": (r.get("validation_summary") or {}).get("passed"),
                     "failed": (r.get("validation_summary") or {}).get("failed"),
                     "fallbacks": (r.get("validation_summary") or {}).get("fallbacks"),
+                    "escalations": (r.get("validation_summary") or {}).get(
+                        "runtime_escalations"
+                    ),
                 }
                 for r in recent
             ],

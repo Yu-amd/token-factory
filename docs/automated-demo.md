@@ -114,16 +114,19 @@ Sections: Run Summary, Current Request, Live feed, routing/model/use-case **dist
 
 Propagated attributes (spans / request telemetry):
 
-`demo_run_id`, `scenario_id`, `request_id`, use case, policy, `serving_pattern`, `lifecycle`, model, compute, endpoint, `fallback_used`
+`demo_run_id`, `scenario_id`, `request_id`, use case, policy, `serving_pattern`, `lifecycle`, model, compute, endpoint, `fallback_used`, `runtime_escalation`
 
 Prometheus-style counters (low cardinality — **no request UUID labels**):
 
 - `token_factory_demo_requests_total`
 - `token_factory_demo_validation_total`
-- `token_factory_demo_fallback_total`
+- `token_factory_demo_fallback_total` — injected preferred-endpoint-unavailable / endpoint-failure skip
+- `token_factory_demo_runtime_escalation_total` — canonical preferred not deployed; next eligible deployed candidate selected
 - `token_factory_demo_route_total`
 
 Labels: `scenario`, `use_case`, `compute_family`, `model`, `validation_status`, `lifecycle`
+
+**Terminology:** `fallback_used` / `token_factory_demo_fallback_total` means failure-injection (or endpoint failure) skipped the preferred endpoint. Selecting the next eligible deployed endpoint because the preferred model×compute is **not deployed** is `runtime_escalation` / `token_factory_demo_runtime_escalation_total` — availability routing, not a performance claim.
 
 ### Metrics exposition (`/metrics`)
 

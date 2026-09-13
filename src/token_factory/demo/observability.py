@@ -69,6 +69,7 @@ class DemoInstrumentor:
         duration_ms: float | None = None,
         ttft_ms: float | None = None,
         classify_ms: float | None = None,
+        runtime_escalation: bool = False,
     ) -> DemoSpan:
         attrs = {
             "demo_run_id": demo_run_id,
@@ -83,6 +84,7 @@ class DemoInstrumentor:
             "selected_compute_family": compute_family,
             "selected_endpoint": endpoint,
             "fallback_used": fallback_used,
+            "runtime_escalation": runtime_escalation,
             "validation_status": validation_status,
         }
         if duration_ms is not None:
@@ -102,6 +104,7 @@ class DemoInstrumentor:
             validation_status=validation_status,
             lifecycle=lifecycle,
             fallback_used=fallback_used,
+            runtime_escalation=runtime_escalation,
         )
         return span
 
@@ -115,8 +118,16 @@ class DemoInstrumentor:
         validation_status: str,
         lifecycle: str | None,
         fallback_used: bool,
+        runtime_escalation: bool = False,
     ) -> None:
-        """Increment low-cardinality Prometheus counters (no request UUID labels)."""
+        """Increment low-cardinality Prometheus counters (no request UUID labels).
+
+        Distinguishes:
+        - ``token_factory_demo_fallback_total`` — injected preferred-endpoint
+          unavailable / endpoint-failure skip
+        - ``token_factory_demo_runtime_escalation_total`` — canonical preferred
+          not deployed; next eligible deployed candidate selected
+        """
         life = lifecycle or "unknown"
         labels = (
             ("scenario", scenario_id or "unknown"),
@@ -126,17 +137,20 @@ class DemoInstrumentor:
             ("validation_status", validation_status),
             ("lifecycle", life),
         )
+        availability_labels = (
+            ("scenario", scenario_id or "unknown"),
+            ("use_case", (use_case or "unknown")[:64]),
+            ("compute_family", compute_family or "unknown"),
+            ("lifecycle", life),
+        )
         self.inc("token_factory_demo_requests_total", labels)
         self.inc("token_factory_demo_validation_total", labels)
         if fallback_used:
+            self.inc("token_factory_demo_fallback_total", availability_labels)
+        if runtime_escalation:
             self.inc(
-                "token_factory_demo_fallback_total",
-                (
-                    ("scenario", scenario_id or "unknown"),
-                    ("use_case", (use_case or "unknown")[:64]),
-                    ("compute_family", compute_family or "unknown"),
-                    ("lifecycle", life),
-                ),
+                "token_factory_demo_runtime_escalation_total",
+                availability_labels,
             )
         self.inc(
             "token_factory_demo_route_total",
@@ -189,6 +203,7 @@ class DemoInstrumentor:
             "lifecycle",
             "serving_pattern",
             "fallback_used",
+            "runtime_escalation",
         }
         for span in self.spans:
             if span.attributes.get("request_id") == request_id:

@@ -3,7 +3,7 @@
   "uid": "token-factory-automated-demo",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "10s",
   "tags": ["token-factory", "automated-demo", "routing-policy", "observability"],
   "description": "Routing-policy and observability validation for Automated Demo traffic. Panels use token_factory_demo_* counters scraped from the host UI/CLI metrics port (:9108). Latency/TTFT panels are operational Envoy telemetry only — not comparative hardware claims.",
@@ -110,15 +110,29 @@
     },
     {
       "id": 5,
-      "title": "Fallback count",
-      "description": "token_factory_demo_fallback_total — preferred-endpoint unavailable / next eligible candidate selections.",
+      "title": "Endpoint fallback (injected)",
+      "description": "token_factory_demo_fallback_total — preferred-endpoint-unavailable injection / endpoint-failure skip. Not preferred-not-deployed escalation (see Runtime escalation panel).",
       "type": "stat",
-      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "gridPos": {"h": 8, "w": 4, "x": 16, "y": 8},
       "datasource": {"type": "prometheus", "uid": "prometheus"},
       "targets": [
         {
           "expr": "sum(increase(token_factory_demo_fallback_total{scenario=~\"$scenario\",lifecycle=~\"$lifecycle\"}[1h]))",
-          "legendFormat": "fallbacks"
+          "legendFormat": "injected fallbacks"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Runtime escalation (preferred unavailable)",
+      "description": "token_factory_demo_runtime_escalation_total — canonical preferred not deployed; next eligible deployed candidate selected (e.g. MI355X → MI300X). Availability routing, not performance.",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 4, "x": 20, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(increase(token_factory_demo_runtime_escalation_total{scenario=~\"$scenario\",lifecycle=~\"$lifecycle\"}[1h]))",
+          "legendFormat": "runtime escalations"
         }
       ]
     },

@@ -44,6 +44,19 @@ TRAFFIC_CONCURRENCY = {
 ProgressCallback = Callable[[DemoRequest, DemoRun], None]
 
 
+def _route_identity_differs(
+    left: dict[str, Any] | None, right: dict[str, Any] | None
+) -> bool:
+    """True when model / compute / endpoint_id differ between two route dicts."""
+    if not left or not right:
+        return False
+    return (
+        left.get("model") != right.get("model")
+        or left.get("compute") != right.get("compute")
+        or left.get("endpoint_id") != right.get("endpoint_id")
+    )
+
+
 class DemoRunner:
     def __init__(
         self,
@@ -291,14 +304,20 @@ class DemoRunner:
                 runtime["endpoint_available"] = False
                 runtime["_synthetic"] = True
 
-            # Detect fallback: preferred unavailable injection caused different selection
-            if "preferred-endpoint-unavailable" in local_inject and canonical and runtime:
-                if (
-                    canonical.get("model") != runtime.get("model")
-                    or canonical.get("compute") != runtime.get("compute")
-                    or canonical.get("endpoint_id") != runtime.get("endpoint_id")
+            # Injected preferred-endpoint-unavailable → fallback_used when selection differs
+            if "preferred-endpoint-unavailable" in local_inject and _route_identity_differs(
+                canonical, runtime
+            ):
+                fallback_used = True
+
+            # Preferred not deployed → next eligible deployed route (not injection)
+            runtime_escalation = False
+            if preferred_not_deployed and _route_identity_differs(canonical, runtime):
+                # Require a real deployed runtime candidate (not synthetic top-of-list)
+                if runtime and runtime.get("endpoint_available") and not runtime.get(
+                    "_synthetic"
                 ):
-                    fallback_used = True
+                    runtime_escalation = True
 
             model_id = (runtime or {}).get("model") or (canonical or {}).get("model")
             compute_id = (runtime or {}).get("compute") or (canonical or {}).get("compute")
@@ -369,6 +388,7 @@ class DemoRunner:
                 "selected_endpoint": endpoint_id,
                 "selected_lifecycle": (runtime or {}).get("lifecycle"),
                 "fallback_used": fallback_used,
+                "runtime_escalation": runtime_escalation,
                 "lifecycle_exclusions_count": len(life_excl),
                 "tp_excluded": tp_excluded,
                 "model_capabilities": model_caps,
@@ -395,6 +415,7 @@ class DemoRunner:
                 "serving_pattern": serving,
                 "lifecycle": life,
                 "fallback_used": fallback_used,
+                "runtime_escalation": runtime_escalation,
             }
             actual["telemetry"] = tel_attrs
 
@@ -427,6 +448,7 @@ class DemoRunner:
                 validation_status=overall,
                 lifecycle=life,
                 fallback_used=fallback_used,
+                runtime_escalation=runtime_escalation,
             )
             req.telemetry = {
                 **tel_attrs,
@@ -454,6 +476,7 @@ class DemoRunner:
         total = len(run.requests)
         passed = warn = failed = 0
         fallbacks = 0
+        runtime_escalations = 0
         dim_counts: dict[str, Counter[str]] = {
             d: Counter() for d in (
                 "classification", "policy", "capability", "lifecycle", "route", "endpoint", "telemetry"
@@ -469,6 +492,8 @@ class DemoRunner:
                 failed += 1
             if (r.actual or {}).get("fallback_used"):
                 fallbacks += 1
+            if (r.actual or {}).get("runtime_escalation"):
+                runtime_escalations += 1
             for d, v in (r.validation or {}).items():
                 if d in dim_counts:
                     dim_counts[d][v] += 1
@@ -479,6 +504,7 @@ class DemoRunner:
             "warnings": warn,
             "failed": failed,
             "fallbacks": fallbacks,
+            "runtime_escalations": runtime_escalations,
             "policy_ok": run.policy_ok(),
             "dimensions": {k: dict(v) for k, v in dim_counts.items()},
         }

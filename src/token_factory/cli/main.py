@@ -1220,7 +1220,8 @@ def demo_run_cmd(
                 f"passed {summary.get('passed')} · "
                 f"warnings {summary.get('warnings')} · "
                 f"failed {summary.get('failed')} · "
-                f"fallbacks {summary.get('fallbacks')}\n"
+                f"fallbacks {summary.get('fallbacks')} · "
+                f"runtime escalations {summary.get('runtime_escalations')}\n"
                 f"Mock       {run.mock} · artifact {run.meta.get('artifact', '—')}\n"
                 f"[dim]Routing-policy validation — not a benchmark[/dim]"
             )
@@ -1231,6 +1232,7 @@ def demo_run_cmd(
         table.add_column("Scenario")
         table.add_column("Model / Compute")
         table.add_column("Fallback")
+        table.add_column("Escalation")
         for r in run.requests:
             a = r.actual or {}
             model = a.get("selected_model") or "—"
@@ -1241,6 +1243,7 @@ def demo_run_cmd(
                 r.display_name or r.scenario_id,
                 f"{model} / {compute}".strip(" /"),
                 "yes" if a.get("fallback_used") else "",
+                "yes" if a.get("runtime_escalation") else "",
             )
         console.print(table)
 

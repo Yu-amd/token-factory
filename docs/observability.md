@@ -33,10 +33,13 @@ by `python -m token_factory.demo.metrics_server` (started automatically by
 |--------|--------|
 | `token_factory_demo_requests_total` | scenario, use_case, compute_family, model, validation_status, lifecycle |
 | `token_factory_demo_validation_total` | same |
-| `token_factory_demo_fallback_total` | scenario, use_case, compute_family, lifecycle |
+| `token_factory_demo_fallback_total` | scenario, use_case, compute_family, lifecycle — injected preferred-endpoint-unavailable / endpoint skip |
+| `token_factory_demo_runtime_escalation_total` | same — preferred not deployed; next eligible deployed candidate |
 | `token_factory_demo_route_total` | scenario, compute_family, model, lifecycle |
 
-Attributes on each demo request span: `demo_run_id`, `scenario_id`, `request_id`, use case, policy, serving_pattern, lifecycle, model, compute, endpoint, `fallback_used`.
+Attributes on each demo request span: `demo_run_id`, `scenario_id`, `request_id`, use case, policy, serving_pattern, lifecycle, model, compute, endpoint, `fallback_used`, `runtime_escalation`.
+
+`fallback_used` ≠ preferred-not-deployed: the latter is `runtime_escalation` (availability), not a performance signal.
 
 See [automated-demo.md](automated-demo.md).
 
@@ -60,7 +63,7 @@ the scrape target matches your kind bridge gateway (`docker network inspect kind
 **Automated Demo** (`token-factory-automated-demo`):
 
 - Requests by use case / model / compute family / lifecycle
-- Validation pass/fail, fallbacks
+- Validation pass/fail, injected endpoint fallbacks, runtime escalations (preferred not deployed)
 - Envoy rate/latency as operational context only
 
 ## Port forwards

@@ -118,6 +118,24 @@ def test_locality_warn_without_radeon():
     assert result["policy"] == ValidationStatus.WARN.value
 
 
+def test_observability_runtime_escalation_counter():
+    instr = DemoInstrumentor()
+    instr.record_counters(
+        scenario_id="interactive-coding",
+        use_case="coding-assistant",
+        compute_family="instinct",
+        model="openai/gpt-oss-20b",
+        validation_status="PASS",
+        lifecycle="production",
+        fallback_used=False,
+        runtime_escalation=True,
+    )
+    text = instr.prometheus_text()
+    assert "token_factory_demo_runtime_escalation_total" in text
+    assert "token_factory_demo_fallback_total" not in text
+    assert sum(instr.get_counter("token_factory_demo_runtime_escalation_total").values()) == 1
+
+
 def test_canonical_vs_runtime_preferred_not_deployed():
     result = validate_request(
         expected={"routing": {"preferred_compute_family": ["instinct"]}},
@@ -313,6 +331,41 @@ def test_fallback_injection_sets_flag():
     assert run.validation_summary["requests"] >= 1
     # At least one request should record fallback when preferred is forced down
     assert any((r.actual or {}).get("fallback_used") for r in run.requests) or run.policy_ok()
+
+
+def test_preferred_not_deployed_increments_runtime_escalation():
+    """Preferred model×compute not in inventory → runtime_escalation metric, not fallback."""
+    instr = DemoInstrumentor()
+    runner = DemoRunner(mock=True, instrumentor=instr)
+    run = runner.run("smoke", mock=True, persist=False)
+    escalated = [
+        r
+        for r in run.requests
+        if (r.actual or {}).get("runtime_escalation")
+    ]
+    assert escalated, "expected at least one preferred-not-deployed → next-eligible escalation"
+    for r in escalated:
+        a = r.actual or {}
+        assert a.get("preferred_not_deployed") is True
+        # Without preferred-endpoint-unavailable injection, escalation ≠ fallback
+        if "preferred-endpoint-unavailable" not in (a.get("injections") or []):
+            assert a.get("fallback_used") is False
+        can = a.get("canonical_preferred") or {}
+        rt = a.get("runtime_selected") or {}
+        assert (
+            can.get("model") != rt.get("model")
+            or can.get("compute") != rt.get("compute")
+            or can.get("endpoint_id") != rt.get("endpoint_id")
+        )
+        assert rt.get("endpoint_available") is True
+
+    escal_counter = instr.get_counter("token_factory_demo_runtime_escalation_total")
+    assert sum(escal_counter.values()) == len(escalated)
+    assert "token_factory_demo_runtime_escalation_total" in instr.prometheus_text()
+    fb = instr.get_counter("token_factory_demo_fallback_total")
+    assert sum(fb.values()) == sum(
+        1 for r in run.requests if (r.actual or {}).get("fallback_used")
+    )
 
 
 def test_ci_policy_ok_ignores_latency():
