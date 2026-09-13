@@ -12,7 +12,7 @@ make ui       # http://localhost:8501  (runs from ui/ so .streamlit/config.toml 
 
 | Tab | Purpose |
 |-----|---------|
-| **Playground** | Chat with live token streaming |
+| **Playground** | Compact operator/demo console — live flow, chat, route inspector |
 | **AMD Routing Matrix** | Opinionated SHOULD-RUN rankings (Instinct / EPYC / Radeon) + live overlay |
 | **Routing** | Compiled domain → AIM routes |
 | **Architecture** | Control-path diagram |
@@ -21,6 +21,24 @@ make ui       # http://localhost:8501  (runs from ui/ so .streamlit/config.toml 
 | **Operations** | Links to SR Dashboard / Grafana / Prometheus |
 
 See [policy-model.md](policy-model.md) and [amd-routing-matrix.md](amd-routing-matrix.md).
+
+## Playground layout
+
+Single-screen operator console (~1440×900 without browser-level vertical scroll).
+Conversation and Route Inspector scroll internally; the composer stays pinned at the bottom.
+Other tabs (Matrix, Policies, …) keep normal page scroll.
+
+| Region | Role |
+|--------|------|
+| Compact header | Title + virtual model + preferred stream path |
+| Health strip | ● Gateway · SR API · SR Dashboard · Grafana · Prometheus (live probes) |
+| Live flow (~80–110px) | CLIENT → ENVOY AI GATEWAY → vLLM SEMANTIC ROUTER → AMD POLICY → AIM / AMD COMPUTE |
+| Conversation (~70%) | Chat history + sample prompts |
+| Route Inspector (~30%) | Mini-tabs: **Decision** · **Policy** · **Metrics** (+ Grafana / SR Dashboard links) |
+
+Flow node states (`idle` / `active` / `complete` / `warning` / `failed`) and connector animation are driven by **real request stages** (classify → resolve → first content token → complete), not fake progress timers. TTFT is measured from stream open to the first content token.
+
+Implementation: `ui/views/playground.py`, `ui/components/route_flow.py`, `ui/components/route_inspector.py`, `ui/components/request_state.py`.
 
 ## Policies tab
 
@@ -58,11 +76,17 @@ The Playground therefore:
 3. Streams **directly** from the AIM OpenAI endpoint (`stream: true`)
 4. Falls back to the gateway path if classify/direct AIM fails
 
+The UI labels the path honestly:
+
+- **direct AIM** — SR classify → AIM stream (default when `TF_PLAYGROUND_DIRECT_STREAM=1`)
+- **gateway SSE** — full gateway path (forced with `TF_PLAYGROUND_DIRECT_STREAM=0`, or after fallback)
+- Fallback shows a warning on the Gateway node plus the error in Route Inspector
+
 Verified: classify ~100ms + AIM TTFT ~0.2s on MI300X public AIMs.
 
 Caption after a reply looks like:
 
-`routed model=openai/gpt-oss-120b · … · live AIM · route=coding_route · classify=127ms`
+`routed model=openai/gpt-oss-120b · … · live AIM · route=coding_route · classify=127ms · TTFT=210ms`
 
 Set `TF_PLAYGROUND_DIRECT_STREAM=0` to force the buffered gateway path (not recommended).
 

@@ -78,8 +78,8 @@ CSS = textwrap.dedent(
     [data-testid="stToolbar"] { display: none; }
     .block-container {
       max-width: var(--tf-max) !important;
-      padding-top: 1.25rem !important;
-      padding-bottom: 3rem !important;
+      padding-top: 0.75rem !important;
+      padding-bottom: 1.25rem !important;
     }
 
     .tf-chrome {
@@ -87,9 +87,9 @@ CSS = textwrap.dedent(
       align-items: center;
       justify-content: space-between;
       gap: 1rem;
-      padding: 0.85rem 0 1.1rem;
+      padding: 0.45rem 0 0.65rem;
       border-bottom: 1px solid var(--tf-border);
-      margin-bottom: 1.35rem;
+      margin-bottom: 0.75rem;
     }
     .tf-brand { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
     .tf-mark {
@@ -267,22 +267,22 @@ CSS = textwrap.dedent(
       display: flex !important;
       flex-wrap: wrap !important;
       align-items: center !important;
-      gap: 0.85rem 1.35rem !important;
-      column-gap: 1.35rem !important;
-      row-gap: 0.75rem !important;
+      gap: 0.55rem 1.0rem !important;
+      column-gap: 1.0rem !important;
+      row-gap: 0.5rem !important;
       border-bottom: 1px solid var(--tf-border) !important;
-      padding: 0.15rem 0 1rem 0 !important;
-      margin-bottom: 1.35rem !important;
+      padding: 0.1rem 0 0.65rem 0 !important;
+      margin-bottom: 0.75rem !important;
     }
     [data-testid="stTabs"] [role="tab"],
     div[role="tablist"] [role="tab"] {
       font-family: "IBM Plex Sans", sans-serif !important;
       font-weight: 500 !important;
-      font-size: 0.95rem !important;
+      font-size: 0.88rem !important;
       color: var(--tf-muted) !important;
       background: transparent !important;
       border-radius: 999px !important;
-      padding: 0.55rem 1.15rem !important;
+      padding: 0.4rem 0.95rem !important;
       margin: 0 !important;
       letter-spacing: 0.015em !important;
       line-height: 1.35 !important;
@@ -630,10 +630,25 @@ def stream_chat_completion(
     meta: dict[str, Any],
     ui_meta: dict[str, Any],
     sr_api: str,
+    on_event: Any | None = None,
 ) -> Iterator[str]:
-    """Prefer SR classify → direct AIM stream (live TTFT); fall back to gateway."""
+    """Prefer SR classify → direct AIM stream (live TTFT); fall back to gateway.
+
+    Optional ``on_event(name, payload)`` fires at real request stages (no fake timers):
+    classifying | classified | streaming | fallback.
+    """
+
+    def _emit(name: str, payload: dict[str, Any] | None = None) -> None:
+        if on_event is None:
+            return
+        try:
+            on_event(name, payload or {})
+        except Exception:
+            pass
+
     if DIRECT_STREAM:
         try:
+            _emit("classifying", {})
             t0 = time.perf_counter()
             classified = classify_intent(prompt, sr_api)
             chat_url, model_id, route = resolve_aim_target(ui_meta, classified)
@@ -643,10 +658,27 @@ def stream_chat_completion(
             conf = (classified.get("classification") or {}).get("confidence")
             if conf is not None:
                 meta["confidence"] = conf
+            meta["classified"] = classified
+            _emit(
+                "classified",
+                {
+                    "classified": classified,
+                    "route": route,
+                    "model_id": model_id,
+                    "aim_url": chat_url,
+                    "classify_ms": meta["classify_ms"],
+                    "confidence": conf,
+                },
+            )
+            meta["stream_path"] = "direct-aim"
+            _emit("streaming", {"stream_path": "direct-aim"})
             yield from stream_from_aim(prompt, chat_url, model_id, meta)
             return
         except Exception as exc:
             meta["direct_error"] = str(exc)[:200]
+            _emit("fallback", {"reason": meta["direct_error"]})
+    meta["stream_path"] = "gateway"
+    _emit("streaming", {"stream_path": "gateway"})
     yield from stream_via_gateway(prompt, model, meta)
 
 
@@ -692,7 +724,8 @@ probe_defs = [
     ("Grafana", links.get("grafana", "http://localhost:3000"), "/api/health"),
     ("Prometheus", links.get("prometheus", "http://localhost:9090"), "/-/healthy"),
 ]
-render_status([(n, probe(u, p)) for n, u, p in probe_defs])
+# Bulky global status tiles removed — Playground owns the compact health strip.
+# Other tabs keep normal page scroll; Playground uses fixed-height scroll regions.
 
 tab_chat, tab_matrix, tab_route, tab_arch, tab_inv, tab_pol, tab_ops = st.tabs(
     [
@@ -707,101 +740,22 @@ tab_chat, tab_matrix, tab_route, tab_arch, tab_inv, tab_pol, tab_ops = st.tabs(
 )
 
 with tab_chat:
+    from views.playground import render_playground_tab
+
     sr_api = links.get("semantic_router_api") or SR_API
-    section(
-        "Playground",
-        "Chat with live streaming",
-        "Semantic Router classifies the prompt, then tokens stream directly from the "
-        "selected AIM backend (bypasses gateway SSE buffering for fast TTFT).",
-        hero=True,
-        meta=[
-            ("Virtual model", VIRTUAL_MODEL),
-            ("Classify API", sr_api),
-        ],
+    render_playground_tab(
+        meta=meta,
+        links=links,
+        virtual_model=VIRTUAL_MODEL,
+        sr_api=sr_api,
+        direct_stream=DIRECT_STREAM,
+        probe_defs=probe_defs,
+        probe=probe,
+        stream_chat_completion=stream_chat_completion,
+        chat_completion=chat_completion,
+        extract_reply=extract_reply,
+        html=html,
     )
-
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-            if msg.get("meta"):
-                st.caption(msg["meta"])
-
-    prompt = st.chat_input("Ask Token Factory… e.g. Write a ROCm kernel sketch in Python")
-    if prompt:
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        with st.chat_message("assistant"):
-            stream_meta: dict[str, Any] = {
-                "model": None,
-                "finish": None,
-                "saw_content": False,
-                "saw_reasoning": False,
-                "gateway_buffered": False,
-            }
-            wait = st.empty()
-            wait.caption("Classifying intent…")
-            try:
-                def _stream() -> Iterator[str]:
-                    first = True
-                    for piece in stream_chat_completion(
-                        prompt,
-                        VIRTUAL_MODEL,
-                        stream_meta,
-                        meta,
-                        sr_api,
-                    ):
-                        if first:
-                            wait.empty()
-                            first = False
-                        yield piece
-
-                reply = st.write_stream(_stream())
-                if not (reply or "").strip():
-                    wait.empty()
-                    body = chat_completion(prompt, VIRTUAL_MODEL)
-                    reply = extract_reply(body)
-                    stream_meta["model"] = body.get("model")
-                    stream_meta["finish"] = (body.get("choices") or [{}])[0].get(
-                        "finish_reason"
-                    )
-                    st.markdown(reply)
-                kind = (
-                    "content"
-                    if stream_meta.get("saw_content")
-                    else "reasoning"
-                    if stream_meta.get("saw_reasoning")
-                    else "stream"
-                )
-                if stream_meta.get("stream_path") == "direct-aim":
-                    mode = (
-                        f"live AIM · route={stream_meta.get('route')} · "
-                        f"classify={stream_meta.get('classify_ms')}ms"
-                    )
-                elif stream_meta.get("gateway_buffered"):
-                    mode = "paced (gateway-buffered SSE)"
-                else:
-                    mode = "gateway SSE"
-                meta_line = (
-                    f"routed model={stream_meta.get('model') or '—'} · "
-                    f"finish={stream_meta.get('finish') or '—'} · {kind} · {mode}"
-                )
-                st.caption(meta_line)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": reply, "meta": meta_line}
-                )
-            except Exception as exc:
-                wait.empty()
-                err = f"{exc} — check SR API (:8081) and AIM endpoints; or run token-factory ports start"
-                st.error(err)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": err}
-                )
-
-    if st.session_state.messages:
-        if st.button("Clear chat", type="secondary"):
-            st.session_state.messages = []
-            st.rerun()
 
 # ---------------------------------------------------------------------------
 # AMD Opinionated Routing Matrix
