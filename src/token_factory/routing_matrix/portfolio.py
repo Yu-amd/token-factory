@@ -1,6 +1,6 @@
 """AIM Portfolio Matrix helpers — full catalog rows, explicit filters, row status.
 
-Portfolio (default): every canonical AIM model is a row; no silent top-N truncation.
+Portfolio (default): every canonical AIM model is a row; no implicit top-N truncation.
 Executive: may truncate to top-ranked ∪ strategic ∪ private-eval ∪ deployed.
 """
 
