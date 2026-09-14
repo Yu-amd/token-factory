@@ -12,10 +12,27 @@ Repository: https://github.com/Yu-amd/token-factory
 
 ## Screenshots
 
-| | |
-|:---:|:---:|
-| <img src="docs/images/routing-matrix.png" alt="AMD Routing Matrix" width="440"/><br/><em>AMD Routing Matrix — policy SHOULD RUN cards + portfolio catalog</em> | <img src="docs/images/automated-demo.png" alt="Automated Demo" width="440"/><br/><em>Automated Demo — scenario packs for routing-policy validation</em> |
-| <img src="docs/images/policies.png" alt="Policies explorer" width="440"/><br/><em>Policies — canonical AMD opinionated routing policy explorer</em> | <img src="docs/images/grafana-automated-demo.png" alt="Grafana Automated Demo dashboard" width="440"/><br/><em>Grafana — Token Factory Automated Demo observability</em> |
+<p align="center">
+  <img src="docs/images/routing-matrix.png" alt="AMD Routing Matrix" width="440"/>
+  &nbsp;&nbsp;
+  <img src="docs/images/automated-demo.png" alt="Automated Demo" width="440"/>
+</p>
+<p align="center">
+  <em>AMD Routing Matrix — policy SHOULD RUN cards + portfolio catalog</em>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <em>Automated Demo — scenario packs for routing-policy validation</em>
+</p>
+
+<p align="center">
+  <img src="docs/images/policies.png" alt="Policies explorer" width="440"/>
+  &nbsp;&nbsp;
+  <img src="docs/images/grafana-automated-demo.png" alt="Grafana Automated Demo dashboard" width="440"/>
+</p>
+<p align="center">
+  <em>Policies — canonical AMD opinionated routing policy explorer</em>
+  &nbsp;&nbsp;·&nbsp;&nbsp;
+  <em>Grafana — Token Factory Automated Demo observability</em>
+</p>
 
 ## Features
 
