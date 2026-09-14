@@ -68,13 +68,13 @@ Details: [docs/policy-model.md](docs/policy-model.md), [docs/amd-routing-matrix.
 
 - **EPYC** — CPU-centric / batch / low-QPS / fleet utilization — **not** a GPU interactive competitor; rises for batch/offline + relaxed latency; does not auto-rise for high-concurrency interactive.
 - **Radeon** — local / workstation / privacy when capable.
-- **MI350P** — PCIe enterprise Tech Preview; private-eval visibility; never silent GA.
+- **MI350P** — PCIe enterprise Tech Preview; shown under private-eval / evaluation lifecycle modes.
 - Summary cards use **distinct selectors** (Performance / Balance / Lowest-Cost Sufficient).
 Economics, capability floors, MI350P Tech Preview, and Radeon Preview:
 [docs/routing-economics.md](docs/routing-economics.md).
 
 **MI350P** (PCIe Instinct) and **Radeon Preview** AIMs are lifecycle-gated
-(`tech-preview` / `preview`) — never silent production GA. Use
+(`tech-preview` / `preview`). Use
 `token-factory recommend --lifecycle evaluation` or the Matrix lifecycle selector
 for evaluation; production defaults exclude them.
 

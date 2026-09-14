@@ -48,7 +48,7 @@ policy:
       rule: Unoptimized AIM cells never rank above ACCEPTABLE unless an explicit override says otherwise.
       kind: hard
     - id: private-eval-not-production
-      rule: Private-eval / Tech Preview / Preview cells are never silent production GA.
+      rule: Private-eval / Tech Preview / Preview cells are excluded from production eligibility.
       kind: hard
     capability_gates:
       multimodal: requires vision or multimodal capability

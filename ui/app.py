@@ -1011,7 +1011,7 @@ with tab_matrix:
                 "locality preferred; never when incapable (e.g. text-only for VLM).",
                 "W7900": "Why Radeon: local / workstation / privacy when AIM is capable.",
                 "MI350P": "Why MI350P: PCIe enterprise Instinct between workstation and rack; "
-                "Tech Preview AIMs via private eval — never silent production GA.",
+                "Tech Preview AIMs via private eval (evaluation lifecycle).",
             }.get(compute_focus)
             if tip:
                 st.caption(tip)
@@ -1260,7 +1260,7 @@ with tab_matrix:
                 )
             pe_note = matrix.get("private_eval_note") or (
                 "Preview / Tech Preview cells on MI350P, R9700, and W7900 are available "
-                "via private eval containers (not silent production GA)."
+                "via private eval containers; excluded from production by default."
             )
             html(
                 f"""

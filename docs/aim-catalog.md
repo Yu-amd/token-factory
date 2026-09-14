@@ -7,7 +7,7 @@ Token Factory’s **CAN RUN** authority for the Routing Matrix.
 | File | Role |
 |------|------|
 | `catalog/aims.yaml` | Authoritative **GA** AIM × accelerator support |
-| `catalog/aims-tech-preview.yaml` | Additive **MI350P Tech Preview** cells (merged; never silent GA) |
+| `catalog/aims-tech-preview.yaml` | Additive **MI350P Tech Preview** cells (merged into the GA catalog) |
 | `catalog/model-aliases.yaml` | Spelling → canonical model id (no duplicate rows) |
 | `catalog/models.yaml` | Capability / specialization metadata (for SHOULD RUN) |
 | `catalog/compute.yaml` | Instinct / EPYC / Radeon column metadata |
@@ -17,7 +17,7 @@ Canonical model ids after alias normalization form the **Portfolio Matrix** row 
 
 ## Portfolio vs ranking
 
-- **Portfolio Matrix** rows = **all** merged catalog models (no silent top-N truncation).
+- **Portfolio Matrix** rows = **all** merged catalog models (explicit filters only; no implicit top-N cut).
 - **Ranking / cards** remain selective: only capability-eligible, lifecycle-allowed cells are ranked.
 - Unsuitable, lifecycle-excluded, and metadata-incomplete models stay **visible** in Portfolio with `row_status`.
 

@@ -80,7 +80,8 @@ Production + Preview / Evaluation / local modes allow them.
 ### MI350P
 
 PCIe / OEM enterprise Instinct — between workstation and rack-scale.
-Tech Preview AIMs only; never silent production GA. Qualitative `hardware_cost_class: high`;
+Tech Preview AIMs only; visible under private-eval / evaluation lifecycle modes.
+Qualitative `hardware_cost_class: high`;
 measured costs null.
 
 ## Objectives

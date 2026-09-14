@@ -1,4 +1,4 @@
-"""Portfolio Matrix tests — full catalog rows, no silent truncation (§§48–57)."""
+"""Portfolio Matrix tests — full catalog rows, no implicit truncation (§§48–57)."""
 
 from __future__ import annotations
 

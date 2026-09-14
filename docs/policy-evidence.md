@@ -15,7 +15,7 @@ Token Factory is **not** a benchmark portal. Evidence influences AMD routing pol
 Capabilities use a **tri-state**: `true` | `false` | `unknown`.
 
 - `unknown` ≠ `false`
-- Unknown required capabilities mark **metadata-incomplete** and degrade confidence; they are not silent hard excludes unless policy mode says so (production excludes unknown; evaluation may admit)
+- Unknown required capabilities mark **metadata-incomplete** and degrade confidence; they are not hard excludes unless policy mode says so (production excludes unknown; evaluation may admit)
 
 ## Workload strengths
 

@@ -6,7 +6,7 @@ Separates:
   Runtime availability — endpoint inventory overlay
 
 Lifecycle (ga|preview|tech-preview|planned) is orthogonal to support_level
-(optimized|preview|unoptimized|general). Tech Preview is never silent GA.
+(optimized|preview|unoptimized|general). Tech Preview is evaluation-only by default.
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ TIER_NAME = {"basic": 1, "standard": 2, "high": 3, "frontier": 4}
 PRIVATE_EVAL_COMPUTES = ("MI350P", "R9700", "W7900")
 PRIVATE_EVAL_AVAILABILITY = "private-eval"
 PRIVATE_EVAL_CHANNEL = "private-eval-container"
-# Executive-only truncation budget (Portfolio never silently truncates).
+# Executive-only truncation budget (Portfolio keeps the full catalog).
 MATRIX_TOP_ROWS = EXECUTIVE_TOP_ROWS
 
 # Soft generation bias — tie-breaker only unless AMD_MEASURED evidence exists.
@@ -468,7 +468,7 @@ class RecommendationEngine:
         """Hard capability gate with tri-state handling.
 
         Returns (ok, why, exclusion_kind).
-        unknown on a required capability → metadata-incomplete (not silent false).
+        unknown on a required capability → metadata-incomplete (not treated as false).
         Production excludes unknown; evaluation/all may admit with degraded confidence.
         """
         caps = self._model_caps(model)
@@ -1498,7 +1498,7 @@ class RecommendationEngine:
         """Build AIM Portfolio Matrix (default) or Executive View.
 
         Portfolio: ``rows`` = full merged AIM catalog; ``display_rows`` only after
-        explicit Show/search/vendor filters (never silent top-N truncation).
+        explicit Show/search/vendor filters (no implicit top-N truncation).
         Executive: may truncate to top-ranked ∪ strategic ∪ private-eval ∪ deployed.
         """
         view_mode = (view_mode or "portfolio").lower()
@@ -1781,8 +1781,7 @@ class RecommendationEngine:
         if len(display_rows) < len(catalog_models):
             coverage_warning = (
                 f"Showing {len(display_rows)} of {len(catalog_models)} catalog models "
-                f"({view_label}). Filters or Executive truncation applied — "
-                "not a silent catalog omission."
+                f"({view_label}). Filters or Executive truncation applied."
             )
 
         # Backward-compat candidates: honor original show semantics on scored set
@@ -1838,7 +1837,7 @@ class RecommendationEngine:
             "private_eval_matrix_cells": private_eval_added,
             "private_eval_note": (
                 "Preview / Tech Preview AIM cells on MI350P, R9700, and W7900 are "
-                "available via private eval containers (not silent production GA)."
+                "available via private eval containers; excluded from production by default."
             ),
             "catalog_counts": counts,
             "compute_counts": build_compute_counts(columns, self.compute),

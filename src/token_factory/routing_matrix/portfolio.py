@@ -279,7 +279,7 @@ def filter_display_rows(
     search: str | None = None,
     vendor: str | None = None,
 ) -> list[str]:
-    """Apply explicit Show / search / vendor filters only (no silent top-N)."""
+    """Apply explicit Show / search / vendor filters only (no implicit top-N)."""
     show = normalize_show(show)
     out = list(ordered_rows)
 
@@ -323,7 +323,7 @@ def filter_display_rows(
                 for cell in (cells.get(m) or {}).values()
             )
         ]
-    # Unknown show → keep all (explicit filter failure should not silently truncate)
+    # Unknown show → keep all (explicit filter failure should not truncate)
     return out
 
 

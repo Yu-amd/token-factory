@@ -30,7 +30,7 @@ See [policy-model.md](policy-model.md) for the Policies tab / CLI / overlay mode
 | File | Role |
 |------|------|
 | `catalog/aims.yaml` | GA AIM model × accelerator support (CAN RUN). Default lifecycle=`ga`. |
-| `catalog/aims-tech-preview.yaml` | Additive MI350P Tech Preview cells (merged by loader; not silent GA). |
+| `catalog/aims-tech-preview.yaml` | Additive MI350P Tech Preview cells (merged by loader). |
 | `catalog/model-aliases.yaml` | Spelling normalization (no duplicate models). |
 | `catalog/compute.yaml` | Instinct (incl. **MI350P**), EPYC, Radeon metadata |
 | `catalog/use-cases.yaml` | Workloads, objectives, lifecycle modes, capability floors |
@@ -112,8 +112,8 @@ for VLM). High-concurrency enterprise interactive prefers Instinct.
 
 ### MI350P
 MI350P is **PCIe enterprise** Instinct — between workstation and rack-scale
-(MI350X/MI355X). Tech Preview AIMs only; private-eval visibility preserved; never
-silent production GA.
+(MI350X/MI355X). Tech Preview AIMs only; visible under private-eval / evaluation
+lifecycle modes (excluded from production by default).
 
 ### Instinct rack (MI300X / MI350X / MI355X)
 High-throughput / high-concurrency datacenter GPUs for interactive and online-throughput
@@ -154,7 +154,7 @@ table (not below), so marks are readable before scrolling the grid.
 
 | Mode | Rows | Truncation |
 |------|------|------------|
-| **Portfolio Matrix** (default) | Full merged AIM catalog (`aims.yaml` ∪ tech-preview after aliases) | **None** silent. `display_rows` shrinks only via explicit Show / search / vendor filters. |
+| **Portfolio Matrix** (default) | Full merged AIM catalog (`aims.yaml` ∪ tech-preview after aliases) | No truncation. `display_rows` shrinks only via explicit Show / search / vendor filters. |
 | **Executive View** | Same `rows` universe | May truncate `display_rows` to top-ranked ∪ strategic ∪ private-eval ∪ deployed; labeled + coverage warning. |
 
 Payload fields:
