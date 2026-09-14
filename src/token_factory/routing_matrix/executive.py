@@ -17,7 +17,17 @@ from token_factory.routing_matrix.projection import MatrixProjection
 ANTI_BENCHMARK = "Routing policy output — not a benchmark"
 
 TopN = Literal[3, 5, 10]
-DEFAULT_TOP_N: TopN = 5
+# None = include every policy-ranked candidate (engine ranked list).
+DEFAULT_TOP_N: int | None = None
+
+
+def normalize_top_n(top_n: int | None) -> int | None:
+    """Resolve Top N: ``None``/``0`` → all ranked; else 3, 5, or 10."""
+    if top_n is None or top_n == 0:
+        return None
+    if top_n not in (3, 5, 10):
+        raise ValueError("top_n must be None/0 (all ranked) or 3, 5, or 10")
+    return top_n
 
 # Policy-first: Executive Slide / CSV omit runtime inventory and confidence.
 EXECUTIVE_CSV_FIELDS = (
@@ -247,7 +257,7 @@ class ExecutiveSlideModel:
     inventory_provided: bool
     runtime_banner: str
     escalation: RuntimeEscalation | None
-    top_n: int
+    top_n: int | None
     timestamp: datetime
     eligible_families: list[str] = field(default_factory=list)
 
@@ -258,6 +268,13 @@ class ExecutiveSlideModel:
             f"{ANTI_BENCHMARK}  ·  Generated {stamp}  ·  "
             f"Policy v{self.policy_version or '—'}"
         )
+
+    @property
+    def alternatives_label(self) -> str:
+        n = len(self.alternatives)
+        if self.top_n is None:
+            return f"Policy-ranked alternatives ({n} ranked)"
+        return f"Policy-ranked alternatives (top {self.top_n})"
 
 
 def ranked_candidates(projection: MatrixProjection) -> list[dict[str, Any]]:
@@ -280,13 +297,16 @@ def ranked_candidates(projection: MatrixProjection) -> list[dict[str, Any]]:
 def build_executive_slide(
     projection: MatrixProjection,
     *,
-    top_n: int = DEFAULT_TOP_N,
+    top_n: int | None = DEFAULT_TOP_N,
     timestamp: datetime | None = None,
     inventory_provided: bool | None = None,
 ) -> ExecutiveSlideModel:
-    """Build executive slide model from projection — no ranking changes."""
-    if top_n not in (3, 5, 10):
-        raise ValueError("top_n must be 3, 5, or 10")
+    """Build executive slide model from projection — no ranking changes.
+
+    ``top_n=None`` (default) includes the full canonical ``ranked`` list.
+    ``top_n`` in {3, 5, 10} optionally caps the table for denser slides.
+    """
+    resolved = normalize_top_n(top_n)
     ts = timestamp or datetime.now(timezone.utc)
     inv = (
         bool(inventory_provided)
@@ -295,7 +315,7 @@ def build_executive_slide(
     )
 
     ranked = ranked_candidates(projection)
-    top = ranked[:top_n]
+    top = ranked if resolved is None else ranked[:resolved]
 
     def _row(cell: dict[str, Any]) -> ExecutiveRow:
         model = str(cell.get("model") or "")
@@ -346,14 +366,14 @@ def build_executive_slide(
         inventory_provided=inv,
         runtime_banner=runtime_banner,
         escalation=escalation,
-        top_n=top_n,
+        top_n=resolved,
         timestamp=ts,
         eligible_families=families[:4],
     )
 
 
 def executive_csv_bytes(model: ExecutiveSlideModel) -> bytes:
-    """Companion CSV: exact top-N rows shown on the slide."""
+    """Companion CSV: exact ranked rows shown on the slide."""
     buf = io.StringIO()
     fields = list(EXECUTIVE_CSV_FIELDS)
     writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")
@@ -427,11 +447,33 @@ def render_executive_png(
     *,
     include_title: bool = True,
 ) -> bytes:
-    """Render 1920×1080 executive slide PNG."""
+    """Render executive slide PNG (1920 wide; height grows with ranked rows)."""
     from PIL import Image, ImageDraw
 
-    width, height = 1920, 1080
+    width = 1920
     margin_x, margin_y = 90, 70
+    callout_h = 200
+    row_h = 36
+    header_h = 34
+    strip_h = 92
+    # Approximate fixed chrome above/below the alternatives table
+    chrome = (
+        margin_y
+        + (38 if include_title else 0)
+        + 34
+        + 28
+        + 22
+        + 18
+        + callout_h
+        + 22
+        + 26
+        + header_h
+        + 20
+        + strip_h
+        + margin_y
+        + 20
+    )
+    height = max(1080, chrome + len(model.alternatives) * row_h)
     img = Image.new("RGB", (width, height), "#101010")
     draw = ImageDraw.Draw(img)
 
@@ -477,7 +519,6 @@ def render_executive_png(
 
     # Preferred Route callout — policy SHOULD RUN (full width; no runtime escalation box)
     callout_top = y
-    callout_h = 200
     draw.rectangle(
         [margin_x, callout_top, content_right, callout_top + callout_h],
         fill="#161616",
@@ -510,7 +551,7 @@ def render_executive_png(
     # Ranked alternatives table (policy ranks — no Runtime / Confidence columns)
     draw.text(
         (margin_x, y),
-        f"Policy-ranked alternatives (top {model.top_n})",
+        model.alternatives_label,
         fill="#8fd400",
         font=font_section,
     )
@@ -522,8 +563,6 @@ def render_executive_png(
     if total_fixed < content_w:
         col_w[2] += content_w - total_fixed
 
-    row_h = 36
-    header_h = 34
     table_top = y
     draw.rectangle(
         [margin_x, table_top, content_right, table_top + header_h],
@@ -555,7 +594,6 @@ def render_executive_png(
 
     y += 20
     # Evidence strip (no confidence labels on executive export)
-    strip_h = 92
     draw.rectangle(
         [margin_x, y, content_right, y + strip_h],
         fill="#141414",

@@ -360,7 +360,7 @@ def render_matrix_png(
     *,
     style: StyleName | str = "executive",
     timestamp: datetime | None = None,
-    top_n: int = DEFAULT_TOP_N,
+    top_n: int | None = DEFAULT_TOP_N,
     inventory_provided: bool | None = None,
 ) -> bytes:
     """PNG via Pillow — Executive Slide (16:9) or Full Matrix canvas."""
@@ -467,7 +467,7 @@ def _csv_for_style(
     projection: MatrixProjection,
     *,
     style: StyleName,
-    top_n: int,
+    top_n: int | None,
     timestamp: datetime,
     inventory_provided: bool | None,
     include_use_case: bool,
@@ -490,7 +490,7 @@ def export_routing_matrix(
     style: StyleName | str = "executive",
     timestamp: datetime | None = None,
     include_use_case: bool = False,
-    top_n: int = DEFAULT_TOP_N,
+    top_n: int | None = DEFAULT_TOP_N,
     inventory_provided: bool | None = None,
 ) -> ExportResult:
     """Export the current-view projection (exact UI rows/cols / ranked top-N)."""
@@ -623,7 +623,7 @@ def _zip_single(
     *,
     style: StyleName,
     timestamp: datetime,
-    top_n: int,
+    top_n: int | None,
     inventory_provided: bool | None,
 ) -> ExportResult:
     buf = io.BytesIO()
@@ -652,7 +652,11 @@ def _zip_single(
                 "png": f"{uc}/{png_name}",
                 "csv": f"{uc}/{csv_name}",
                 "rows": (
-                    min(top_n, len(projection.source.get("ranked") or []))
+                    (
+                        len(projection.source.get("ranked") or [])
+                        if top_n in (None, 0)
+                        else min(top_n, len(projection.source.get("ranked") or []))
+                    )
                     if style == "executive"
                     else len(projection.rows)
                 ),
@@ -707,7 +711,7 @@ def export_all_use_cases(
     style: StyleName | str = "executive",
     timestamp: datetime | None = None,
     endpoints: list[dict[str, Any]] | None = None,
-    top_n: int = DEFAULT_TOP_N,
+    top_n: int | None = DEFAULT_TOP_N,
 ) -> ExportResult:
     """Iterate catalog use cases with the same lifecycle/objective/view filters.
 
@@ -883,7 +887,7 @@ def resolve_export(
     matrix_kwargs: dict[str, Any] | None = None,
     endpoints: list[dict[str, Any]] | None = None,
     timestamp: datetime | None = None,
-    top_n: int = DEFAULT_TOP_N,
+    top_n: int | None = DEFAULT_TOP_N,
 ) -> ExportResult:
     """UI-facing resolver: Current View vs All Use Cases + invalid combo handling."""
     style_key = normalize_style(style)

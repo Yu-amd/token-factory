@@ -537,7 +537,9 @@ def matrix_export(
     lifecycle: str = typer.Option("production", "--lifecycle", "-L"),
     objective: str = typer.Option("balanced", "--objective", "-O"),
     show: str = typer.Option("all", "--show"),
-    top_n: int = typer.Option(5, "--top-n", help="Executive Slide top N (3|5|10)"),
+    top_n: int = typer.Option(
+        0, "--top-n", help="Executive Slide: 0=all ranked (default), or 3|5|10"
+    ),
 ) -> None:
     """Export Routing Matrix projection (PowerPoint-ready; not a benchmark)."""
     from token_factory.routing_matrix import RecommendationEngine, resolve_export

@@ -1297,17 +1297,21 @@ with tab_matrix:
                         "Layout",
                         ["Executive Slide", "Full Matrix"],
                         key="matrix_export_style",
-                        help="Executive Slide = 16:9 policy preferred route + top-N "
-                        "(no runtime inventory). Full Matrix = exact projected grid.",
+                        help="Executive Slide = 16:9 policy preferred + all ranked "
+                        "(optional Top N cap; no runtime inventory). "
+                        "Full Matrix = exact projected grid.",
                     )
-                    export_top_n = 5
+                    export_top_n: int | None = None
                     if export_style.startswith("Executive"):
-                        export_top_n = st.selectbox(
+                        top_choice = st.selectbox(
                             "Top N",
-                            [3, 5, 10],
-                            index=1,
+                            ["All ranked", 3, 5, 10],
+                            index=0,
                             key="matrix_export_top_n",
+                            help="All ranked = full policy-ranked list. "
+                            "3/5/10 optionally caps the table.",
                         )
+                        export_top_n = None if top_choice == "All ranked" else int(top_choice)
                 with ex3:
                     export_format = st.selectbox(
                         "Format",
@@ -1329,7 +1333,7 @@ with tab_matrix:
                             scope=scope_key,
                             format=fmt_key,  # type: ignore[arg-type]
                             style=style_key,  # type: ignore[arg-type]
-                            top_n=int(export_top_n) if style_key == "executive" else 5,
+                            top_n=export_top_n if style_key == "executive" else None,
                             matrix_kwargs={
                                 "objective": obj_opts[obj_label],
                                 "deployment": dep_opts[dep_label],

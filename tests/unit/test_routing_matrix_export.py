@@ -136,7 +136,8 @@ def test_png_signature_dimensions_and_metadata_strings():
     assert result.data[:8] == b"\x89PNG\r\n\x1a\n"
     assert len(result.data) > 1000
     img = Image.open(io.BytesIO(result.data))
-    assert img.size == (1920, 1080)
+    assert img.size[0] == 1920
+    assert img.size[1] >= 1080
     proj = get_current_matrix_projection(matrix)
     assert proj.policy_version
     assert ANTI_BENCHMARK
@@ -193,7 +194,8 @@ def test_all_use_cases_executive_zip_one_png_each():
             assert f"{i:02d}-{uc}-executive.csv" in names
             png = zf.read(f"{i:02d}-{uc}-executive.png")
             assert png[:8] == b"\x89PNG\r\n\x1a\n"
-            assert Image.open(io.BytesIO(png)).size == (1920, 1080)
+            assert Image.open(io.BytesIO(png)).size[0] == 1920
+            assert Image.open(io.BytesIO(png)).size[1] >= 1080
         combined = list(csv.DictReader(io.StringIO(zf.read("all-use-cases.csv").decode("utf-8"))))
         assert combined
         assert "use_case" in (combined[0].keys())
@@ -241,11 +243,16 @@ def test_csv_fields_are_real_only():
 def test_executive_export_top_n():
     matrix = _matrix()
     proj = get_current_matrix_projection(matrix)
+    ranked = list(matrix.get("ranked") or [])
+    # Default: all ranked
+    slide_all = build_executive_slide(proj, timestamp=FIXED_TS)
+    assert slide_all.top_n is None
+    assert len(slide_all.alternatives) == len(ranked)
+    assert "ranked" in slide_all.alternatives_label
     for n in (3, 5, 10):
         slide = build_executive_slide(proj, top_n=n, timestamp=FIXED_TS)
-        assert len(slide.alternatives) <= n
         assert slide.top_n == n
-        ranked = list(matrix.get("ranked") or [])
+        assert len(slide.alternatives) <= n
         assert len(slide.alternatives) == min(n, len(ranked))
     csv_result = export_routing_matrix(
         matrix, format="csv", style="executive", top_n=3, timestamp=FIXED_TS
@@ -253,6 +260,12 @@ def test_executive_export_top_n():
     rows = list(csv.DictReader(io.StringIO(csv_result.data.decode("utf-8"))))
     assert len(rows) == 3
     assert rows[0]["rank"] == "1"
+    csv_all = export_routing_matrix(
+        matrix, format="csv", style="executive", timestamp=FIXED_TS
+    )
+    assert len(list(csv.DictReader(io.StringIO(csv_all.data.decode("utf-8"))))) == len(
+        ranked
+    )
 
 
 def test_executive_csv_omits_confidence():
@@ -275,12 +288,13 @@ def test_executive_preferred_matches_canonical_ranking():
     ranked = matrix["ranked"]
     assert ranked
     proj = get_current_matrix_projection(matrix)
-    slide = build_executive_slide(proj, top_n=5, timestamp=FIXED_TS)
+    slide = build_executive_slide(proj, timestamp=FIXED_TS)
     assert slide.preferred is not None
     assert slide.preferred.model == ranked[0]["model"]
     assert slide.preferred.compute == ranked[0]["compute"]
     assert slide.preferred.confidence == str(ranked[0].get("confidence") or "—")
     assert slide.preferred.recommendation == "Preferred" or ranked[0]["recommendation"]
+    assert len(slide.alternatives) == len(ranked)
     for i, row in enumerate(slide.alternatives):
         assert row.model == ranked[i]["model"]
         assert row.compute == ranked[i]["compute"]
@@ -334,7 +348,8 @@ def test_runtime_does_not_rewrite_preferred():
     png = render_executive_png(slide)
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
     with Image.open(io.BytesIO(png)) as img:
-        assert img.size == (1920, 1080)
+        assert img.size[0] == 1920
+        assert img.size[1] >= 1080
 
 
 def test_executive_confidence_evidence_policy_footer():

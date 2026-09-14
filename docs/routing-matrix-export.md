@@ -13,17 +13,17 @@ not the executive export.
 
 Exports consume `RecommendationEngine.matrix(...)` then
 `get_current_matrix_projection(matrix)` — the same rows/columns the UI shows.
-Executive Slide additionally reads the canonical `ranked` list (top N) without
-re-sorting.
+Executive Slide additionally reads the canonical `ranked` list (all ranked by
+default; optional Top N cap) without re-sorting.
 
 | Scope | Behavior |
 |-------|----------|
-| **Current View** | Exact filtered `display_rows` × UI `display_cols` (Portfolio or Executive View), plus ranked top-N for Executive Slide |
+| **Current View** | Exact filtered `display_rows` × UI `display_cols` (Portfolio or Executive View), plus full ranked list (or Top N cap) for Executive Slide |
 | **All Use Cases** | Iterates the catalog use-case list once each (canonical order), keeping the same lifecycle / objective / view / Show / compute-group filters |
 
 | Layout | Behavior |
 |--------|----------|
-| **Executive Slide** (primary) | 1920×1080 policy preferred-route callout + top-N policy-ranked alternatives (default 5; optional 3/10), evidence strip — no runtime inventory / escalation |
+| **Executive Slide** (primary) | 1920-wide policy preferred-route callout + **all policy-ranked** alternatives by default (optional Top N 3/5/10), evidence strip — no runtime inventory / escalation; PNG height grows with row count |
 | **Full Matrix** | Larger canvas sized to the projected grid |
 
 Legacy style name `slide` aliases **Executive Slide**.
@@ -31,7 +31,7 @@ Legacy style name `slide` aliases **Executive Slide**.
 | Format | Behavior |
 |--------|----------|
 | **PNG** | Deterministic Pillow render |
-| **CSV** | Executive = companion top-N rows; Full = all projected cells (`recommendation`, `confidence`, `evidence_*`, …) |
+| **CSV** | Executive = companion ranked rows shown on the slide; Full = all projected cells (`recommendation`, `confidence`, `evidence_*`, …) |
 | **ZIP Bundle** | `README.txt`, `index.csv`, `all-use-cases.csv`, plus per-use-case PNG + CSV |
 | **SVG** | Optional lightweight vector (same metadata) |
 
@@ -41,7 +41,7 @@ Legacy style name `slide` aliases **Executive Slide**.
 
 1. **Header** — Token Factory Routing Matrix · use-case display name · lifecycle · objective · Policy vX · Canonical policy  
 2. **Preferred Route (policy)** — model, compute, 1–2 line canonical rationale; banner notes runtime inventory is not shown  
-3. **Policy-ranked alternatives** — Rank, Recommendation, Model (short label OK), Compute, Lifecycle (no Runtime / Confidence columns)  
+3. **Policy-ranked alternatives** — full ranked list by default (or Top N cap): Rank, Recommendation, Model, Compute, Lifecycle  
 4. **Evidence strip** (no fabricated AMD MEASURED; confidence omitted from executive export)  
 5. **Footer** — anti-benchmark · timestamp · policy version  
 
@@ -67,7 +67,7 @@ All-use-cases Executive ZIP entries use numbered companions:
 
 Streamlit **AMD Routing Matrix** → expander **Export for PowerPoint**:
 
-1. Scope · Layout · Format (Top N when Executive Slide)
+1. Scope · Layout · Format (Top N optional when Executive Slide; default All ranked)
 2. **Generate export**
 3. `st.download_button` with bytes
 
@@ -87,7 +87,8 @@ from token_factory.routing_matrix import (
 engine = RecommendationEngine()
 matrix = engine.matrix("coding-assistant", view_mode="executive", lifecycle_mode="production")
 proj = get_current_matrix_projection(matrix)  # exact UI grid
-png = export_routing_matrix(matrix, format="png", style="executive", top_n=5)
+png = export_routing_matrix(matrix, format="png", style="executive")  # all ranked
+png_cap = export_routing_matrix(matrix, format="png", style="executive", top_n=5)
 bundle = export_all_use_cases(
     engine,
     matrix_kwargs={"lifecycle_mode": "production", "view_mode": "executive"},
