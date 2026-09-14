@@ -109,15 +109,18 @@ interactive serving.
 Radeon (R9700 / W7900) is **local / workstation / privacy** class. It can win when
 the AIM is capable and locality is preferred. Incapable AIMs never win (e.g. text-only
 for VLM). High-concurrency enterprise interactive prefers Instinct.
+Prefer **TP1** — multi-GPU communication is not well optimized yet.
 
 ### MI350P
 MI350P is **PCIe enterprise** Instinct — between workstation and rack-scale
 (MI350X/MI355X). Tech Preview AIMs only; visible under private-eval / evaluation
-lifecycle modes (excluded from production by default).
+lifecycle modes (excluded from production by default). Prefer models that fit
+**single-GPU TP1** — multi-GPU TP>1 is not well optimized yet (same as Radeon).
 
 ### Instinct rack (MI300X / MI350X / MI355X)
 High-throughput / high-concurrency datacenter GPUs for interactive and online-throughput
 workloads that need capability or concurrency beyond EPYC/Radeon/PCIe.
+May use **TP2 / TP4 / TP8** when a model does not fit TP1; TP1 is still preferred when it fits.
 
 ## Summary card selectors (distinct algorithms)
 

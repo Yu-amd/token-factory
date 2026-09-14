@@ -184,10 +184,13 @@ class Candidate:
     preference_label: str | None = None
     lifecycle_excluded: bool = False
     exclusion_reason: str | None = None
-    exclusion_kind: str | None = None  # lifecycle | latency | serving_pattern | locality
+    exclusion_kind: str | None = None  # lifecycle | tp_fit | latency | serving_pattern | locality
     availability: str | None = None
     deployment_channel: str | None = None
     matrix_mark: str | None = None
+    # Tensor-parallel fit (distinct from Tech Preview lifecycle alias "tp")
+    recommended_tp: int | None = None
+    tp_max_recommended: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -231,6 +234,8 @@ class Candidate:
             "availability": self.availability,
             "deployment_channel": self.deployment_channel,
             "matrix_mark": self.matrix_mark,
+            "recommended_tp": self.recommended_tp,
+            "tp_max_recommended": self.tp_max_recommended,
             "why": self.reasons,
         }
 
@@ -461,6 +466,86 @@ class RecommendationEngine:
     def _floor_tier(self, use_case_id: str) -> int:
         name = self.capability_floors.get(use_case_id, "standard")
         return TIER_NAME.get(name, 2)
+
+    def _tensor_parallel_policy(self) -> dict[str, Any]:
+        """Policy tensor_parallel block (not Tech Preview lifecycle)."""
+        nested = self.policy.get("_canonical") or self.policy.get("policy") or {}
+        if isinstance(nested, dict) and nested.get("tensor_parallel"):
+            return dict(nested["tensor_parallel"])
+        return dict(self.policy.get("tensor_parallel") or {})
+
+    def _tp_policy_for(self, compute_id: str) -> dict[str, Any]:
+        compute = self.compute.get(compute_id) or {}
+        raw = compute.get("tp_policy") or {}
+        return {
+            "preferred": int(raw.get("preferred") or 1),
+            "max_recommended": int(raw.get("max_recommended") or 1),
+            "multi_gpu_ok": bool(raw.get("multi_gpu_ok", False)),
+            "applies": raw.get("applies", True) is not False,
+            "max_size_class_tp1": str(raw.get("max_size_class_tp1") or "large"),
+            "note": raw.get("note"),
+        }
+
+    def _model_required_tp(self, model: str, compute_id: str | None = None) -> int:
+        """Minimum tensor-parallel degree needed for the model on this SKU class.
+
+        Uses optional model serving.min_tp_to_fit, then size_class defaults from policy.
+        If size_class exceeds the SKU's max_size_class_tp1, require at least TP2.
+        """
+        meta = self.models.get(model, {})
+        size = str(meta.get("size_class") or "unknown")
+        serving = meta.get("serving") if isinstance(meta.get("serving"), dict) else {}
+        explicit = serving.get("min_tp_to_fit") if serving else None
+        tp_pol = self._tensor_parallel_policy()
+        defaults = tp_pol.get("size_class_default_min_tp") or {}
+        required = 1
+        if explicit is not None:
+            try:
+                required = max(1, int(explicit))
+            except (TypeError, ValueError):
+                required = 1
+        else:
+            try:
+                required = max(1, int(defaults.get(size, defaults.get("unknown", 1))))
+            except (TypeError, ValueError):
+                required = 1
+
+        if compute_id:
+            sku = self._tp_policy_for(compute_id)
+            max_tp1 = sku["max_size_class_tp1"]
+            if SIZE_TIER.get(size, 2) > SIZE_TIER.get(max_tp1, 3):
+                required = max(required, 2)
+        return required
+
+    def _tp_fit(
+        self, model: str, compute_id: str
+    ) -> tuple[bool, int, int, str, str | None]:
+        """Hard gate: model must fit at an allowed TP degree for the compute SKU.
+
+        Returns (ok, required_tp, max_recommended, why, exclusion_kind).
+        EPYC (applies=false) skips GPU TP scheduling.
+        MI350P / Radeon: max_recommended=1 — TP>1 not well optimized.
+        """
+        sku = self._tp_policy_for(compute_id)
+        required = self._model_required_tp(model, compute_id)
+        max_rec = sku["max_recommended"]
+        if not sku["applies"]:
+            return True, required, max_rec, "CPU path — GPU tensor parallel N/A", None
+        if required <= max_rec:
+            note = sku.get("note")
+            why = f"fits at TP{required} (max recommended TP{max_rec} on {compute_id})"
+            if note and required == 1 and not sku["multi_gpu_ok"]:
+                why = f"{why}; prefer TP1"
+            return True, required, max_rec, why, None
+        why = (
+            f"requires TP{required} but {compute_id} max recommended is TP{max_rec}"
+            f" (multi-GPU TP>1 not well optimized)"
+            if not sku["multi_gpu_ok"]
+            else f"requires TP{required} but {compute_id} max recommended is TP{max_rec}"
+        )
+        if sku.get("note"):
+            why = f"{why}; {sku['note']}"
+        return False, required, max_rec, why, "tp_fit"
 
     def _capability_ok(
         self, model: str, use_case: dict[str, Any], *, lifecycle_mode: str | None = None
@@ -957,6 +1042,22 @@ class RecommendationEngine:
         else:
             score += gen * 0.05  # otherwise negligible tie-break only
 
+        # Tensor-parallel soft preference: TP1 preferred everywhere; TP>1 only when needed
+        tp_pol = self._tensor_parallel_policy()
+        if tp_pol.get("prefer_tp1_bonus", True):
+            sku_tp = self._tp_policy_for(compute_id)
+            if sku_tp.get("applies", True):
+                req_tp = self._model_required_tp(model, compute_id)
+                if req_tp == 1:
+                    score += 4
+                    reasons.append("fits preferred TP1")
+                elif sku_tp.get("multi_gpu_ok"):
+                    # Allow but soft-prefer lower TP degrees on rack Instinct
+                    score -= min(6, (req_tp - 1))
+                    reasons.append(
+                        f"requires TP{req_tp} (multi-GPU ok on {compute_id}; TP1 preferred when it fits)"
+                    )
+
         # Deployment soft match
         score += deployment_fit * 5
 
@@ -1003,6 +1104,7 @@ class RecommendationEngine:
 
         candidates: list[Candidate] = []
         excluded: list[Candidate] = []
+        tp_excluded: list[Candidate] = []
         locality_exclusions: list[Candidate] = []
 
         for model in self.aims:
@@ -1044,6 +1146,38 @@ class RecommendationEngine:
 
                 production_eligible = lifecycle == "ga"
                 lifecycle_ok = lifecycle in allowed
+
+                tp_ok, req_tp, max_tp, tp_why, tp_excl = self._tp_fit(model, compute_id)
+                if not tp_ok:
+                    availability = None
+                    deployment_channel = None
+                    if lifecycle in ("preview", "tech-preview"):
+                        availability = PRIVATE_EVAL_AVAILABILITY
+                        deployment_channel = PRIVATE_EVAL_CHANNEL
+                    tp_cand = Candidate(
+                        model=model,
+                        compute_id=compute_id,
+                        family=family,
+                        aim_support=aim_support,
+                        lifecycle=lifecycle,
+                        recommendation="NOT_SUPPORTED",
+                        score=0.0,
+                        reasons=[tp_why],
+                        production_eligible=False,
+                        lifecycle_excluded=False,
+                        exclusion_kind=tp_excl or "tp_fit",
+                        exclusion_reason=tp_why,
+                        matrix_mark="⊘",
+                        availability=availability,
+                        deployment_channel=deployment_channel,
+                        recommended_tp=req_tp,
+                        tp_max_recommended=max_tp,
+                        confidence="low",
+                    )
+                    tp_excluded.append(tp_cand)
+                    if include_excluded:
+                        candidates.append(tp_cand)
+                    continue
 
                 ov_level, ov_reasons, ov_norm = self._override_level(
                     use_case_id, model, compute_id
@@ -1231,6 +1365,8 @@ class RecommendationEngine:
                     availability=availability,
                     deployment_channel=deployment_channel,
                     confidence=conf_label,
+                    recommended_tp=req_tp,
+                    tp_max_recommended=max_tp,
                 )
 
                 if not lifecycle_ok:
@@ -1396,6 +1532,7 @@ class RecommendationEngine:
             "candidates": [c.to_dict() for c in visible],
             "ranked": [c.to_dict() for c in rankable[:20]],
             "lifecycle_exclusions": [c.to_dict() for c in excluded[:30]],
+            "tp_fit_exclusions": [c.to_dict() for c in tp_excluded[:30]],
             "locality_soft_exclusions": [
                 {
                     "model": c.model,
@@ -1411,6 +1548,7 @@ class RecommendationEngine:
                 "visible": len(visible),
                 "deployed": sum(1 for c in eligible if c.endpoint_available),
                 "lifecycle_excluded": len(excluded),
+                "tp_fit_excluded": len(tp_excluded),
             },
         }
         if _keep_pool:
@@ -1565,7 +1703,7 @@ class RecommendationEngine:
         pe_result.pop("_pool", None)
         pe_sources = list(pe_result["candidates"]) + list(
             pe_result.get("lifecycle_exclusions") or []
-        )
+        ) + list(pe_result.get("tp_fit_exclusions") or [])
         existing_keys = {(c["model"], c["compute"]) for c in cell_sources}
         private_eval_added = []
         for c in pe_sources:
@@ -1943,6 +2081,7 @@ class RecommendationEngine:
         )
         with_excl.pop("_pool", None)
         exclusions = with_excl.get("lifecycle_exclusions") or []
+        tp_fit_excl = with_excl.get("tp_fit_exclusions") or []
         locality_excl = with_excl.get("locality_soft_exclusions") or []
         mi350p_excl = [e for e in exclusions if e.get("compute") == "MI350P"]
         radeon_excl = [e for e in exclusions if e.get("family") == "radeon"]
@@ -1983,6 +2122,12 @@ class RecommendationEngine:
                 f"Radeon Preview excluded ({len(radeon_excl)} cells): "
                 f"lifecycle preview not allowed in mode '{rec['lifecycle_mode']}'"
             )
+        if tp_fit_excl:
+            explanation_parts.append(
+                f"Tensor-parallel fit excluded ({len(tp_fit_excl)} cells): "
+                f"model needs TP degree above SKU max (MI350P/Radeon prefer TP1; "
+                f"multi-GPU not well optimized)"
+            )
         if serving_excl:
             explanation_parts.append(
                 f"Serving-pattern note: {len(serving_excl)} EPYC candidates deprioritized "
@@ -2009,10 +2154,12 @@ class RecommendationEngine:
             "currently_deployed_eligible": deployed[:5],
             "selected_runtime_route": selected,
             "lifecycle_exclusions": exclusions[:20],
+            "tp_fit_exclusions": tp_fit_excl[:20],
             "serving_pattern_exclusions": serving_excl[:10],
             "locality_exclusions": locality_excl[:10],
             "exclusions": {
                 "lifecycle": exclusions[:20],
+                "tp_fit": tp_fit_excl[:20],
                 "serving_pattern_latency": serving_excl[:10],
                 "locality": locality_excl[:10],
             },

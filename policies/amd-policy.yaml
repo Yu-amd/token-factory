@@ -2,8 +2,8 @@ version: '3'
 policy:
   id: amd-routing-policy
   display_name: AMD Opinionated Routing Policy
-  policy_version: '2.4'
-  published: '2026-09-13'
+  policy_version: '2.5'
+  published: '2026-09-14'
   description: >-
     Canonical AMD workload-to-model-to-compute policy used by Token Factory. AIM catalog = CAN RUN;
     this policy = SHOULD RUN; endpoint inventory = AVAILABLE NOW; compiled routes = ACTIVE EXECUTION.
@@ -49,6 +49,11 @@ policy:
       kind: hard
     - id: private-eval-not-production
       rule: Private-eval / Tech Preview / Preview cells are excluded from production eligibility.
+      kind: hard
+    - id: tensor-parallel-fit
+      rule: >-
+        Model must fit at an allowed tensor-parallel degree for the target compute (TP1 preferred).
+        MI350P and Radeon do not recommend TP>1 (multi-GPU not well optimized); rack Instinct may use TP2/4/8 when needed.
       kind: hard
     capability_gates:
       multimodal: requires vision or multimodal capability
@@ -118,9 +123,14 @@ policy:
       statement: >-
         MI350P represents an Instinct PCIe enterprise deployment path for conventional server and
         OEM infrastructure. Current MI350P AIMs represented in Token Factory may be Tech Preview and
-        must remain lifecycle-gated.
+        must remain lifecycle-gated. Multi-GPU tensor parallel (TP>1) is not well optimized yet —
+        prefer models that fit single-GPU TP1.
       lifecycle_default: tech-preview
       not_alias_of: MI350X
+      tensor_parallel:
+        prefer: TP1
+        max_recommended: TP1
+        multi_gpu_ok: false
       preferred_for:
       - pcie-enterprise
       - oem-server
@@ -132,8 +142,13 @@ policy:
       statement: >-
         Radeon AIMs target local/workstation inference where locality, privacy, developer experience,
         and infrastructure footprint matter. Radeon should be preferred only when a supported model
-        clears the workload's capability and scale requirements.
+        clears the workload's capability and scale requirements. Multi-GPU TP>1 is not well optimized —
+        prefer models that fit single-GPU TP1.
       lifecycle_default: preview
+      tensor_parallel:
+        prefer: TP1
+        max_recommended: TP1
+        multi_gpu_ok: false
       preferred_for:
       - local
       - workstation
@@ -156,6 +171,20 @@ policy:
       - low-qps
       - fleet-utilization
       not: GPU interactive competitor
+  # Tensor parallel / single-GPU fit (distinct from Tech Preview lifecycle alias "tp").
+  # Prefer TP1 everywhere; allow TP2/TP4/TP8 only where multi_gpu_ok (rack Instinct).
+  tensor_parallel:
+    description: >-
+      Ensure recommended model×compute pairs can fit at an allowed tensor-parallel degree.
+      MI350P and Radeon prefer TP1 — multi-GPU communication is not well optimized yet.
+      Rack-scale Instinct (MI300X/MI350X/MI355X/…) may use TP>1 when the model needs it.
+    size_class_default_min_tp:
+      small: 1
+      medium: 1
+      large: 1
+      frontier: 2
+      unknown: 1
+    prefer_tp1_bonus: true
   serving_patterns:
     interactive:
       display_name: Interactive

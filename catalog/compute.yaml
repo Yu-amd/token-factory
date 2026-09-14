@@ -19,6 +19,12 @@ compute:
       local_workstation: false
       edge_friendly: false
       rack_scale: true
+    # Multi-GPU tensor parallel OK on rack / OAM Instinct.
+    tp_policy:
+      preferred: 1
+      max_recommended: 8
+      multi_gpu_ok: true
+      max_size_class_tp1: large
     relative_cost_class: high
     hardware_cost_class: high
     token_economic_efficiency: null
@@ -35,6 +41,11 @@ compute:
       local_workstation: false
       edge_friendly: false
       rack_scale: true
+    tp_policy:
+      preferred: 1
+      max_recommended: 8
+      multi_gpu_ok: true
+      max_size_class_tp1: large
     relative_cost_class: high
     hardware_cost_class: high
     token_economic_efficiency: null
@@ -51,6 +62,11 @@ compute:
       local_workstation: false
       edge_friendly: false
       rack_scale: true
+    tp_policy:
+      preferred: 1
+      max_recommended: 8
+      multi_gpu_ok: true
+      max_size_class_tp1: large
     relative_cost_class: high
     hardware_cost_class: high
     token_economic_efficiency: null
@@ -73,6 +89,13 @@ compute:
       oem_server: true
       conventional_pcie: true
       rack_scale: false
+    # Multi-GPU communication not well optimized yet — prefer single-GPU TP1 only.
+    tp_policy:
+      preferred: 1
+      max_recommended: 1
+      multi_gpu_ok: false
+      max_size_class_tp1: large
+      note: TP>1 not well optimized on MI350P; recommend models that fit TP1.
     # Qualitative only — no measured $/hour or tokens/sec
     relative_cost_class: high
     hardware_cost_class: high
@@ -90,6 +113,11 @@ compute:
       local_workstation: false
       edge_friendly: false
       rack_scale: true
+    tp_policy:
+      preferred: 1
+      max_recommended: 8
+      multi_gpu_ok: true
+      max_size_class_tp1: large
     relative_cost_class: very-high
     hardware_cost_class: very-high
     token_economic_efficiency: null
@@ -106,6 +134,11 @@ compute:
       local_workstation: false
       edge_friendly: false
       rack_scale: true
+    tp_policy:
+      preferred: 1
+      max_recommended: 8
+      multi_gpu_ok: true
+      max_size_class_tp1: large
     relative_cost_class: very-high
     hardware_cost_class: very-high
     token_economic_efficiency: null
@@ -128,6 +161,13 @@ compute:
       cpu_inference: true
       batch_friendly: true
       fleet_utilization: true
+    # CPU path — tensor parallel N/A (not a GPU TP schedule).
+    tp_policy:
+      preferred: 1
+      max_recommended: 1
+      multi_gpu_ok: false
+      applies: false
+      max_size_class_tp1: medium
     relative_cost_class: low
     hardware_cost_class: low
     token_economic_efficiency: null
@@ -147,6 +187,12 @@ compute:
       cpu_inference: true
       batch_friendly: true
       fleet_utilization: true
+    tp_policy:
+      preferred: 1
+      max_recommended: 1
+      multi_gpu_ok: false
+      applies: false
+      max_size_class_tp1: medium
     relative_cost_class: low
     hardware_cost_class: low
     token_economic_efficiency: null
@@ -166,6 +212,12 @@ compute:
       cpu_inference: true
       batch_friendly: true
       fleet_utilization: true
+    tp_policy:
+      preferred: 1
+      max_recommended: 1
+      multi_gpu_ok: false
+      applies: false
+      max_size_class_tp1: medium
     relative_cost_class: low
     hardware_cost_class: low
     token_economic_efficiency: null
@@ -186,6 +238,13 @@ compute:
       privacy_friendly: true
       departmental: true
       developer_workstation: true
+    # Multi-GPU TP>1 not well optimized — single-GPU TP1 only; smaller models.
+    tp_policy:
+      preferred: 1
+      max_recommended: 1
+      multi_gpu_ok: false
+      max_size_class_tp1: medium
+      note: TP>1 not well optimized on Radeon; recommend models that fit TP1.
     relative_cost_class: medium
     hardware_cost_class: medium
     token_economic_efficiency: null
@@ -205,6 +264,12 @@ compute:
       privacy_friendly: true
       departmental: true
       developer_workstation: true
+    tp_policy:
+      preferred: 1
+      max_recommended: 1
+      multi_gpu_ok: false
+      max_size_class_tp1: medium
+      note: TP>1 not well optimized on Radeon; recommend models that fit TP1.
     relative_cost_class: medium
     hardware_cost_class: medium
     token_economic_efficiency: null

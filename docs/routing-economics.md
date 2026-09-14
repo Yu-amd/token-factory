@@ -83,6 +83,23 @@ PCIe / OEM enterprise Instinct — between workstation and rack-scale.
 Tech Preview AIMs only; visible under private-eval / evaluation lifecycle modes.
 Qualitative `hardware_cost_class: high`;
 measured costs null.
+**Tensor parallel:** prefer **TP1** only — multi-GPU communication is not well
+optimized yet (same as Radeon). Frontier / multi-GPU-only models should route to
+rack Instinct (MI300X / MI350X / MI355X) at TP2/TP4/TP8 when needed.
+
+## Tensor parallel fit (TP1 / TP2 / TP4 / TP8)
+
+Distinct from Tech Preview lifecycle alias “tp”. Catalog `tp_policy` per SKU:
+
+| SKU class | max TP | Notes |
+|-----------|--------|-------|
+| Rack Instinct | TP8 | Prefer TP1 when the model fits; allow TP2/4/8 |
+| **MI350P** | **TP1** | Multi-GPU not well optimized |
+| **Radeon** | **TP1** | Multi-GPU not well optimized; `max_size_class_tp1: medium` |
+| EPYC | N/A | CPU path — GPU TP schedule does not apply |
+
+Hard gate `exclusion_kind: tp_fit` drops model×compute cells that need more TP than
+the SKU recommends. Soft score prefers pairs that fit at TP1.
 
 ## Objectives
 
@@ -119,5 +136,5 @@ Leave empty until real AMD numbers exist.
 
 - **EPYC** — CPU-centric / batch / low-QPS / fleet utilization; **not** a GPU interactive competitor.
   Rises for batch/offline + relaxed latency; does not auto-rise for high-concurrency interactive.
-- **Radeon** — local / workstation / privacy; wins when capable + locality preferred.
-- **MI350P** — PCIe enterprise; Tech Preview; between workstation and rack Instinct.
+- **Radeon** — local / workstation / privacy; wins when capable + locality preferred; TP1 only.
+- **MI350P** — PCIe enterprise; Tech Preview; between workstation and rack Instinct; TP1 only.

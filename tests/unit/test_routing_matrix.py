@@ -902,7 +902,90 @@ def test_simulate_shows_exclusion_categories():
     )
     assert "exclusions" in sim
     assert "lifecycle" in sim["exclusions"]
+    assert "tp_fit" in sim["exclusions"]
     assert any(e["compute"] == "MI350P" for e in sim["lifecycle_exclusions"])
+
+
+def test_tp_fit_mi350p_and_radeon_prefer_tp1():
+    """MI350P/Radeon reject models that need TP>1; rack Instinct may use TP≥2."""
+    engine = RecommendationEngine(load_routing_bundle(ROOT))
+    frontier = "meta-llama/Llama-3.1-405B-Instruct"
+    large = "meta-llama/Llama-3.3-70B-Instruct"
+    small = "meta-llama/Llama-3.1-8B-Instruct"
+
+    ok_f_mi, req_f, max_mi, why_f, kind_f = engine._tp_fit(frontier, "MI350P")
+    assert not ok_f_mi
+    assert req_f >= 2
+    assert max_mi == 1
+    assert kind_f == "tp_fit"
+    assert "TP" in why_f
+
+    ok_f_rack, req_rack, max_rack, _, kind_rack = engine._tp_fit(frontier, "MI300X")
+    assert ok_f_rack
+    assert req_rack >= 2
+    assert max_rack >= 2
+    assert kind_rack is None
+
+    # large fits TP1 on MI350P; exceeds Radeon max_size_class_tp1 (medium)
+    ok_l_mi, req_l_mi, _, _, _ = engine._tp_fit(large, "MI350P")
+    assert ok_l_mi and req_l_mi == 1
+    ok_l_rad, req_l_rad, max_rad, _, kind_l = engine._tp_fit(large, "R9700")
+    assert not ok_l_rad
+    assert req_l_rad >= 2
+    assert max_rad == 1
+    assert kind_l == "tp_fit"
+
+    ok_s, req_s, _, _, _ = engine._tp_fit(small, "R9700")
+    assert ok_s and req_s == 1
+
+    # EPYC: TP schedule N/A
+    ok_cpu, _, _, why_cpu, _ = engine._tp_fit(large, "EPYC_9965")
+    assert ok_cpu
+    assert "N/A" in why_cpu or "CPU" in why_cpu
+
+
+def test_tp_fit_gate_surfaces_in_recommend_when_forced():
+    """Hard gate: oversized size_class never ranks on TP1-only SKUs."""
+    engine = RecommendationEngine(load_routing_bundle(ROOT))
+    # Inject a synthetic frontier AIM on MI350P to prove the gate (not a catalog claim).
+    model = "meta-llama/Llama-3.1-405B-Instruct"
+    engine.aims[model] = {
+        "model": model,
+        "support": {
+            "instinct": {
+                "MI350P": {"support": "preview", "lifecycle": "tech-preview"},
+                "MI300X": {"support": "optimized", "lifecycle": "ga"},
+            }
+        },
+    }
+    rec = engine.recommend(
+        "complex-reasoning",
+        objective="quality",
+        lifecycle_mode="evaluation",
+        include_excluded=True,
+    )
+    mi_ranked = [c for c in rec["ranked"] if c["compute"] == "MI350P" and c["model"] == model]
+    assert mi_ranked == []
+    tp_excl = [
+        e
+        for e in rec.get("tp_fit_exclusions") or []
+        if e["model"] == model and e["compute"] == "MI350P"
+    ]
+    assert tp_excl and tp_excl[0]["exclusion_kind"] == "tp_fit"
+    rack = [c for c in rec["ranked"] if c["compute"] == "MI300X" and c["model"] == model]
+    assert rack, "frontier should still rank on rack Instinct with TP≥2"
+
+
+def test_compute_catalog_tp_policy_present():
+    bundle = load_routing_bundle(ROOT)
+    by_id = {c["id"]: c for c in bundle["compute"]["compute"]}
+    assert by_id["MI350P"]["tp_policy"]["max_recommended"] == 1
+    assert by_id["MI350P"]["tp_policy"]["multi_gpu_ok"] is False
+    assert by_id["R9700"]["tp_policy"]["max_recommended"] == 1
+    assert by_id["MI300X"]["tp_policy"]["max_recommended"] >= 2
+    assert by_id["MI300X"]["tp_policy"]["multi_gpu_ok"] is True
+    nested = (bundle["policy"].get("_canonical") or {}).get("tensor_parallel") or {}
+    assert nested.get("size_class_default_min_tp", {}).get("frontier") == 2
 
 
 def test_serving_pattern_list_and_latency_mapping():
