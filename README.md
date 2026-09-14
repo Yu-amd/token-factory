@@ -4,6 +4,19 @@ Reference architecture for **config-driven Mixture-of-Models (MoM)** inference o
 
 Repository: https://github.com/Yu-amd/token-factory
 
+<p align="center">
+  <img src="docs/images/playground.png" alt="Token Factory Playground — live classify → policy → AIM console" width="920"/>
+</p>
+
+<p align="center"><em>Playground — operator console with live flow, route inspector, and direct-AIM streaming</em></p>
+
+## Screenshots
+
+| | |
+|:---:|:---:|
+| <img src="docs/images/routing-matrix.png" alt="AMD Routing Matrix" width="440"/><br/><em>AMD Routing Matrix — policy SHOULD RUN cards + portfolio catalog</em> | <img src="docs/images/automated-demo.png" alt="Automated Demo" width="440"/><br/><em>Automated Demo — scenario packs for routing-policy validation</em> |
+| <img src="docs/images/policies.png" alt="Policies explorer" width="440"/><br/><em>Policies — canonical AMD opinionated routing policy explorer</em> | <img src="docs/images/grafana-automated-demo.png" alt="Grafana Automated Demo dashboard" width="440"/><br/><em>Grafana — Token Factory Automated Demo observability</em> |
+
 ## Features
 
 - **Single virtual model**: `token-factory/auto`
