@@ -26,6 +26,8 @@ from components.request_state import (  # noqa: E402
     mark_failed,
     mark_fallback,
     mark_first_token,
+    mark_governance,
+    mark_peer_complete,
     mark_streaming,
     new_request_state,
 )
@@ -43,6 +45,104 @@ SAMPLE_PROMPTS = (
     "Explain MI300X vs MI350P for inference",
     "Summarize AMD Instinct positioning for RAG",
 )
+
+SVP_BUTTON_LABELS = (
+    ("svp-routine-coding", "1 · Routine"),
+    ("svp-complex-coding", "2 · Complex"),
+    ("svp-mcp-tool", "3 · MCP"),
+    ("svp-a2a-delegate", "4 · A2A"),
+    ("svp-policy-deny", "5 · Deny"),
+)
+
+
+def _repo_src() -> str:
+    root = Path(__file__).resolve().parents[2]
+    return str(root / "src")
+
+
+def _load_svp_scenarios() -> list[dict[str, Any]]:
+    try:
+        src = _repo_src()
+        if src not in sys.path:
+            sys.path.insert(0, src)
+        from token_factory.demo.loader import load_pack
+
+        pack = load_pack("svp")
+        return list(pack.get("scenarios") or [])
+    except Exception:
+        return []
+
+
+def _mi300x_health_checks(meta: dict[str, Any]) -> list[tuple[str, str]]:
+    """Live /v1/models probes for Instinct endpoints — never fabricate status."""
+    checks: list[tuple[str, str]] = []
+    try:
+        src = _repo_src()
+        if src not in sys.path:
+            sys.path.insert(0, src)
+        from token_factory.adapters.model_endpoint import OpenAIModelEndpointAdapter
+        from token_factory.config.loader import load_endpoints
+
+        eps = (load_endpoints().get("endpoints") or []) or (meta.get("endpoints") or [])
+        adapter = OpenAIModelEndpointAdapter(timeout=5.0)
+        for ep in eps:
+            if not ep.get("enabled", True):
+                continue
+            if str(ep.get("accelerator") or "").upper() != "MI300X":
+                continue
+            host = ep.get("host")
+            port = ep.get("port") or 8000
+            if not host or "svc.cluster.local" in str(host):
+                continue
+            base = f"http://{host}:{port}"
+            health = adapter.health(base_url=base, model=ep.get("model"))
+            label = str(ep.get("id") or "mi300x")[:22]
+            if health.reachable and health.model_available:
+                value = f"UP {health.latency_ms}ms"
+            elif health.reachable:
+                value = f"HTTP {health.latency_ms}ms"
+            else:
+                value = "DOWN"
+            checks.append((label, value))
+    except Exception as exc:
+        checks.append(("MI300X", f"DOWN:{str(exc)[:20]}"))
+    return checks
+
+
+def _run_phase2_peer(
+    scenario: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None, dict[str, Any] | None]:
+    """Authorize + branch MCP/A2A/deny (and model authorize-only). Returns ctx/gov/peer/routing."""
+    src = _repo_src()
+    if src not in sys.path:
+        sys.path.insert(0, src)
+    import uuid
+
+    from token_factory.adapters.registry import resolve_adapters
+    from token_factory.adapters.types import RequestContext
+    from token_factory.phase2.pipeline import run_phase2_request
+
+    req = scenario.get("request") or {}
+    ctx = RequestContext(
+        request_id=str(uuid.uuid4()),
+        principal=str(req.get("principal") or "engineering.user"),
+        business_unit=str(req.get("business_unit") or "Engineering"),
+        policy_pack=str(req.get("policy_pack") or "amd-balanced"),
+        request_type=str(req.get("request_type") or "model"),  # type: ignore[arg-type]
+        data_classification=str(req.get("data_classification") or "internal"),
+        lifecycle=str(req.get("lifecycle") or "production"),
+        objective=str(req.get("objective") or "balanced"),
+        prompt=str(req.get("prompt") or ""),
+        tool_name=req.get("tool_name"),
+        agent_task=req.get("agent_task"),
+    )
+    result = run_phase2_request(ctx, adapters=resolve_adapters(), execute_model=False)
+    return (
+        result.ctx.to_dict(),
+        result.governance.to_dict(),
+        result.peer.to_dict() if result.peer else None,
+        result.routing.to_dict() if result.routing else None,
+    )
 
 PLAYGROUND_CSS = """
 <style>
@@ -496,7 +596,7 @@ def _render_thinking_live(slot: Any, text: str) -> None:
 
 
 def _health_class(value: str) -> str:
-    if value == "UP":
+    if value == "UP" or value.startswith("UP "):
         return "tf-up"
     if value.startswith("HTTP"):
         return "tf-warn"
@@ -583,6 +683,8 @@ def render_playground_tab(
         st.session_state.pg_phase = "phase1"
     if "pg_governance" not in st.session_state:
         st.session_state.pg_governance = None
+    if "pg_svp_scenario" not in st.session_state:
+        st.session_state.pg_svp_scenario = None
     # Legacy sample-button key → active prompt (one-shot migrate).
     if st.session_state.get("pg_pending_prompt") and not st.session_state.pg_active_prompt:
         st.session_state.pg_active_prompt = st.session_state.pg_pending_prompt
@@ -591,6 +693,8 @@ def render_playground_tab(
     state: RequestState = st.session_state.pg_request
     active_prompt = st.session_state.pg_active_prompt
     st.session_state.pg_active_prompt = None
+    active_scenario = st.session_state.pg_svp_scenario
+    st.session_state.pg_svp_scenario = None
 
     html(
         f"""
@@ -613,7 +717,28 @@ def render_playground_tab(
     st.session_state.pg_phase = phase
 
     checks = [(n, probe(u, p)) for n, u, p in probe_defs]
+    checks.extend(_mi300x_health_checks(meta))
     render_compact_health(checks, html=html)
+
+    if phase == "phase2":
+        html(
+            "<p class='tf-pg-flow-hint' style='margin:0.15rem 0 0.35rem;font-size:0.7rem'>"
+            "Phase 2: Agent Gateway governs <strong>model + MCP + A2A</strong> peers. "
+            "Agent Gateway is <strong>mock/demo</strong> for Friday; MI300X model path stays live."
+            "</p>"
+        )
+        svp_scenarios = {s["id"]: s for s in _load_svp_scenarios()}
+        cols = st.columns(len(SVP_BUTTON_LABELS))
+        for col, (sid, label) in zip(cols, SVP_BUTTON_LABELS):
+            with col:
+                if st.button(label, key=f"pg_svp_{sid}", use_container_width=True):
+                    sc = svp_scenarios.get(sid)
+                    if sc:
+                        st.session_state.pg_svp_scenario = sc
+                        st.session_state.pg_active_prompt = (sc.get("request") or {}).get(
+                            "prompt"
+                        ) or sc.get("id")
+                        st.rerun()
 
     flow_slot = st.empty()
 
@@ -660,7 +785,7 @@ def render_playground_tab(
             if active_prompt:
                 st.session_state.messages.append({"role": "user", "content": active_prompt})
                 state = new_request_state(direct_stream=direct_stream)
-                mark_classifying(state)
+                state.phase = phase
                 st.session_state.pg_request = state
                 _paint_flow()
 
@@ -668,6 +793,126 @@ def render_playground_tab(
                     st.markdown(active_prompt)
 
                 with st.chat_message("assistant"):
+                    # Phase 2 peer / deny paths — no model stream.
+                    if phase == "phase2" and active_scenario:
+                        req = active_scenario.get("request") or {}
+                        rtype = str(req.get("request_type") or "model")
+                        if rtype in ("mcp", "a2a") or (
+                            rtype == "mcp"
+                            and (req.get("tool_name") or "") in ("exfiltrate_secrets",)
+                        ):
+                            status = st.empty()
+                            status.caption("Agent Gateway authorizing…")
+                            try:
+                                ctx_d, gov_d, peer_d, _routing_d = _run_phase2_peer(
+                                    active_scenario
+                                )
+                                mark_governance(
+                                    state,
+                                    gov_d,
+                                    request_type=rtype,
+                                    request_id=ctx_d.get("request_id"),
+                                )
+                                st.session_state.pg_request = state
+                                st.session_state.pg_governance = gov_d
+                                _paint_flow()
+                                if not gov_d.get("allowed"):
+                                    status.empty()
+                                    reply = (
+                                        f"**Governance DENY** at Agent Gateway "
+                                        f"(`{gov_d.get('implementation')}` / `{gov_d.get('mode')}`).\n\n"
+                                        f"{gov_d.get('reason') or 'Request stopped — no model execution.'}\n\n"
+                                        f"`request_id={ctx_d.get('request_id')}`"
+                                    )
+                                    answer_slot = st.empty()
+                                    answer_slot.markdown(reply)
+                                    meta_line = caption_line(state)
+                                    st.caption(meta_line)
+                                    st.session_state.messages.append(
+                                        {"role": "assistant", "content": reply, "meta": meta_line}
+                                    )
+                                    st.session_state.pg_request = state
+                                    _paint_flow()
+                                    st.rerun()
+                                else:
+                                    mark_peer_complete(state, peer_d or {})
+                                    status.empty()
+                                    reply = (
+                                        f"**{rtype.upper()} peer** "
+                                        f"`{(peer_d or {}).get('peer')}` — "
+                                        f"vLLM-SR not on path.\n\n"
+                                        f"{(peer_d or {}).get('content')}\n\n"
+                                        f"`request_id={ctx_d.get('request_id')}`"
+                                    )
+                                    st.markdown(reply)
+                                    meta_line = caption_line(state)
+                                    st.caption(meta_line)
+                                    st.session_state.messages.append(
+                                        {"role": "assistant", "content": reply, "meta": meta_line}
+                                    )
+                                    st.session_state.pg_request = state
+                                    _paint_flow()
+                                    st.rerun()
+                            except Exception as exc:
+                                mark_failed(state, str(exc))
+                                st.session_state.pg_request = state
+                                _paint_flow()
+                                err = f"Phase 2 peer path failed: {exc}"
+                                st.error(err)
+                                st.session_state.messages.append(
+                                    {"role": "assistant", "content": err}
+                                )
+                                st.stop()
+
+                    # Model path (Phase 1, or Phase 2 model after governance)
+                    if phase == "phase2":
+                        scenario = active_scenario or {
+                            "request": {
+                                "prompt": active_prompt,
+                                "request_type": "model",
+                                "principal": "engineering.user",
+                                "objective": "balanced",
+                            }
+                        }
+                        try:
+                            ctx_d, gov_d, _peer_d, routing_d = _run_phase2_peer(scenario)
+                            mark_governance(
+                                state,
+                                gov_d,
+                                request_type="model",
+                                request_id=ctx_d.get("request_id"),
+                            )
+                            if routing_d:
+                                state.routing_decision = routing_d
+                            st.session_state.pg_governance = gov_d
+                            st.session_state.pg_request = state
+                            _paint_flow()
+                            if not gov_d.get("allowed"):
+                                reply = (
+                                    f"**Governance DENY** — model path not started.\n\n"
+                                    f"{gov_d.get('reason')}"
+                                )
+                                st.markdown(reply)
+                                meta_line = caption_line(state)
+                                st.caption(meta_line)
+                                st.session_state.messages.append(
+                                    {"role": "assistant", "content": reply, "meta": meta_line}
+                                )
+                                st.rerun()
+                        except Exception as exc:
+                            # Governance mock failure must not break Phase 1 model path
+                            state.governance = {
+                                "allowed": True,
+                                "authn": "SKIP",
+                                "authz": "SKIP",
+                                "reason": f"governance fallback: {exc}",
+                                "implementation": "mock",
+                                "mode": "mock",
+                            }
+                            mark_governance(
+                                state, state.governance, request_type="model"
+                            )
+
                     stream_meta: dict[str, Any] = {
                         "model": None,
                         "finish": None,
@@ -676,15 +921,26 @@ def render_playground_tab(
                         "gateway_buffered": False,
                     }
                     status = st.empty()
-                    status.caption("Classifying intent…")
+                    status.caption(
+                        "Agent Gateway PASS · classifying…"
+                        if phase == "phase2"
+                        else "Classifying intent…"
+                    )
                     thinking_slot = st.empty()
                     answer_slot = st.empty()
+                    mark_classifying(state, phase=phase)
+                    st.session_state.pg_request = state
+                    _paint_flow()
 
                     def on_event(name: str, payload: dict[str, Any]) -> None:
                         nonlocal state
                         if name == "classifying":
-                            mark_classifying(state)
-                            status.caption("Classifying intent…")
+                            mark_classifying(state, phase=phase)
+                            status.caption(
+                                "Agent Gateway PASS · classifying…"
+                                if phase == "phase2"
+                                else "Classifying intent…"
+                            )
                         elif name == "classified":
                             classified = payload.get("classified") or {}
                             apply_classify(
@@ -710,6 +966,17 @@ def render_playground_tab(
                                 aim_url=payload.get("aim_url"),
                                 policy_meta=pol,
                                 recommendation=rec,
+                            )
+                            if state.routing_decision is None:
+                                state.routing_decision = {}
+                            state.routing_decision.update(
+                                {
+                                    "intent": state.classification,
+                                    "model": state.model,
+                                    "compute": state.compute,
+                                    "route": state.route,
+                                    "endpoint_id": (ep or {}).get("id"),
+                                }
                             )
                             status.caption(f"Routed {route_name} · opening stream…")
                         elif name == "fallback":
@@ -783,8 +1050,12 @@ def render_playground_tab(
                             body = chat_completion(active_prompt, virtual_model)
                             reply = extract_reply(body)
                             stream_meta["model"] = body.get("model")
-                            stream_meta["finish"] = (body.get("choices") or [{}])[0].get("finish_reason")
-                            stream_meta["stream_path"] = stream_meta.get("stream_path") or "gateway"
+                            stream_meta["finish"] = (body.get("choices") or [{}])[0].get(
+                                "finish_reason"
+                            )
+                            stream_meta["stream_path"] = (
+                                stream_meta.get("stream_path") or "gateway"
+                            )
                             if not state.stream_path:
                                 mark_streaming(state, "gateway")
                             answer_slot.markdown(reply)
@@ -793,7 +1064,9 @@ def render_playground_tab(
                         state.finish = stream_meta.get("finish")
                         state.gateway_buffered = bool(stream_meta.get("gateway_buffered"))
                         state.saw_content = bool(stream_meta.get("saw_content")) or state.saw_content
-                        state.saw_reasoning = bool(stream_meta.get("saw_reasoning")) or state.saw_reasoning
+                        state.saw_reasoning = (
+                            bool(stream_meta.get("saw_reasoning")) or state.saw_reasoning
+                        )
                         if stream_meta.get("stream_path"):
                             state.stream_path = stream_meta["stream_path"]
                         if stream_meta.get("classify_ms") is not None:
@@ -819,28 +1092,49 @@ def render_playground_tab(
                         mark_failed(state, str(exc))
                         st.session_state.pg_request = state
                         _paint_flow()
-                        err = f"{exc} — check SR API (:8081) and AIM endpoints; or run token-factory ports start"
+                        err = (
+                            f"{exc} — check SR API (:8081) and AIM endpoints; "
+                            "or run token-factory ports start"
+                        )
                         st.error(err)
                         st.session_state.messages.append({"role": "assistant", "content": err})
 
-        s1, s2, s3, s4 = st.columns([1, 1, 1, 0.55])
-        for col, sample in zip((s1, s2, s3), SAMPLE_PROMPTS):
-            with col:
-                short = sample if len(sample) <= 40 else sample[:37] + "…"
-                if st.button(short, key=f"pg_sample_{abs(hash(sample)) % 10_000_000}"):
-                    st.session_state.pg_active_prompt = sample
+        if phase == "phase1":
+            s1, s2, s3, s4 = st.columns([1, 1, 1, 0.55])
+            for col, sample in zip((s1, s2, s3), SAMPLE_PROMPTS):
+                with col:
+                    short = sample if len(sample) <= 40 else sample[:37] + "…"
+                    if st.button(short, key=f"pg_sample_{abs(hash(sample)) % 10_000_000}"):
+                        st.session_state.pg_active_prompt = sample
+                        st.rerun()
+            with s4:
+                if st.button("Clear", key="pg_clear"):
+                    st.session_state.messages = []
+                    st.session_state.pg_active_prompt = None
+                    st.session_state.pg_svp_scenario = None
+                    st.session_state.pg_governance = None
+                    st.session_state.pg_request = new_request_state(
+                        direct_stream=direct_stream
+                    )
                     st.rerun()
-        with s4:
-            if st.button("Clear", key="pg_clear"):
+        else:
+            if st.button("Clear", key="pg_clear_p2"):
                 st.session_state.messages = []
                 st.session_state.pg_active_prompt = None
+                st.session_state.pg_svp_scenario = None
+                st.session_state.pg_governance = None
                 st.session_state.pg_request = new_request_state(direct_stream=direct_stream)
                 st.rerun()
 
     with right:
         with st.container(height=chat_height + 48, border=True):
             html('<div class="tf-pg-pane-insp" aria-hidden="true"></div>')
-            render_route_inspector(st.session_state.pg_request, links=links, html=html)
+            render_route_inspector(
+                st.session_state.pg_request,
+                links=links,
+                html=html,
+                phase=st.session_state.get("pg_phase") or "phase1",
+            )
 
     prompt = st.chat_input("Ask Token Factory… e.g. Write a ROCm kernel sketch in Python")
     if prompt:

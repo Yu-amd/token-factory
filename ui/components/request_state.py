@@ -6,10 +6,11 @@ import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
-NodeId = Literal["client", "gateway", "router", "policy", "aim"]
+NodeId = Literal["client", "gateway", "agent_gw", "router", "policy", "aim"]
 NodeStatus = Literal["idle", "active", "complete", "warning", "failed"]
 Stage = Literal[
     "idle",
+    "authorizing",
     "classifying",
     "resolving",
     "streaming",
@@ -42,6 +43,7 @@ def _idle_nodes() -> dict[str, NodeState]:
     return {
         "client": NodeState(),
         "gateway": NodeState(),
+        "agent_gw": NodeState(),
         "router": NodeState(),
         "policy": NodeState(),
         "aim": NodeState(),
@@ -68,7 +70,7 @@ class RequestState:
     preference_label: str | None = None
     policy_profile: str | None = None
     use_case: str | None = None
-    stream_path: str | None = None  # "direct-aim" | "gateway"
+    stream_path: str | None = None  # "direct-aim" | "gateway" | "mcp" | "a2a" | "denied"
     preferred_path: str = "direct-aim"
     fallback: bool = False
     fallback_reason: str | None = None
@@ -83,6 +85,12 @@ class RequestState:
     t0: float | None = None
     stream_t0: float | None = None
     aim_url: str | None = None
+    phase: str = "phase1"
+    request_type: str | None = None
+    request_id: str | None = None
+    governance: dict[str, Any] | None = None
+    peer: dict[str, Any] | None = None
+    routing_decision: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         raw = asdict(self)
@@ -109,10 +117,76 @@ def _set_node(
     state.nodes[node] = NodeState(status=status, detail=detail)
 
 
-def mark_classifying(state: RequestState) -> RequestState:
-    state.stage = "classifying"
-    state.t0 = time.perf_counter()
+def mark_governance(
+    state: RequestState,
+    gov: dict[str, Any],
+    *,
+    request_type: str = "model",
+    request_id: str | None = None,
+) -> RequestState:
+    """Phase 2 Agent Gateway decision — stored separately from routing."""
+    state.phase = "phase2"
+    state.stage = "authorizing"
+    if state.t0 is None:
+        state.t0 = time.perf_counter()
+    state.governance = dict(gov)
+    state.request_type = request_type
+    if request_id:
+        state.request_id = request_id
     _set_node(state, "client", "complete", "prompt sent")
+    allowed = bool(gov.get("allowed"))
+    mode = str(gov.get("mode") or gov.get("implementation") or "mock")
+    detail = ("PASS" if allowed else "DENY") + f" · {mode}"
+    if not allowed:
+        reason = str(gov.get("reason") or "denied")[:80]
+        _set_node(state, "agent_gw", "failed", f"{detail} · {reason}")
+        _set_node(state, "gateway", "failed", detail)
+        _set_node(state, "router", "idle", "not reached")
+        _set_node(state, "policy", "idle", "not reached")
+        _set_node(state, "aim", "idle", "not reached")
+        state.stage = "failed"
+        state.stream_path = "denied"
+        state.error = str(gov.get("reason") or "Agent Gateway denied request")
+        return state
+    _set_node(state, "agent_gw", "complete", detail)
+    _set_node(state, "gateway", "complete", detail)
+    if request_type in ("mcp", "a2a"):
+        _set_node(state, "router", "idle", "not on path")
+        _set_node(state, "policy", "idle", "not on path")
+        _set_node(state, "aim", "idle", f"{request_type.upper()} peer")
+    return state
+
+
+def mark_peer_complete(
+    state: RequestState,
+    peer: dict[str, Any],
+) -> RequestState:
+    """MCP / A2A peer result — never touches vLLM-SR."""
+    state.peer = dict(peer)
+    state.stream_path = str(peer.get("request_type") or state.request_type or "mcp")
+    peer_name = str(peer.get("peer") or "peer")
+    latency = peer.get("latency_ms")
+    detail = peer_name if latency is None else f"{peer_name} · {latency}ms"
+    _set_node(state, "aim", "complete", detail)
+    state.stage = "complete"
+    state.total_ms = elapsed_ms(state.t0)
+    state.finish = "peer"
+    return state
+
+
+def mark_classifying(state: RequestState, *, phase: str | None = None) -> RequestState:
+    state.stage = "classifying"
+    if state.t0 is None:
+        state.t0 = time.perf_counter()
+    if phase:
+        state.phase = phase
+    _set_node(state, "client", "complete", "prompt sent")
+    if state.phase == "phase2" and state.nodes.get("agent_gw", NodeState()).status == "complete":
+        # Keep Agent Gateway decision; only advance the model branch.
+        _set_node(state, "router", "active", "classifying…")
+        _set_node(state, "policy", "idle")
+        _set_node(state, "aim", "idle")
+        return state
     _set_node(state, "gateway", "active", "hand-off")
     _set_node(state, "router", "active", "classifying…")
     _set_node(state, "policy", "idle")
@@ -269,8 +343,8 @@ def mark_first_token(
 def mark_complete(state: RequestState, *, now: float | None = None) -> RequestState:
     state.stage = "complete"
     state.total_ms = elapsed_ms(state.t0, now)
-    for node in ("client", "gateway", "router", "policy", "aim"):
-        cur = state.nodes[node]
+    for node in ("client", "gateway", "agent_gw", "router", "policy", "aim"):
+        cur = state.nodes.get(node) or NodeState()
         if cur.status == "active":
             _set_node(state, node, "complete", cur.detail)  # type: ignore[arg-type]
         elif cur.status == "idle" and node == "gateway" and state.stream_path == "direct-aim":
@@ -285,9 +359,10 @@ def mark_failed(state: RequestState, error: str) -> RequestState:
     state.error = error[:400]
     state.total_ms = elapsed_ms(state.t0)
     # Mark the furthest active node as failed.
-    for node in ("aim", "policy", "router", "gateway", "client"):
-        if state.nodes[node].status in ("active", "warning"):
-            _set_node(state, node, "failed", state.nodes[node].detail or "error")  # type: ignore[arg-type]
+    for node in ("aim", "policy", "router", "agent_gw", "gateway", "client"):
+        cur = state.nodes.get(node)
+        if cur and cur.status in ("active", "warning"):
+            _set_node(state, node, "failed", cur.detail or "error")  # type: ignore[arg-type]
             break
     else:
         _set_node(state, "client", "failed", "error")
@@ -295,6 +370,12 @@ def mark_failed(state: RequestState, error: str) -> RequestState:
 
 
 def stream_path_label(state: RequestState) -> str:
+    if state.stream_path == "denied":
+        return "stopped at Agent Gateway"
+    if state.stream_path == "mcp":
+        return "MCP peer (not via vLLM-SR)"
+    if state.stream_path == "a2a":
+        return "A2A sub-agent peer (not via vLLM-SR)"
     if state.stream_path == "direct-aim":
         return "direct AIM (SR classify → AIM stream)"
     if state.stream_path == "gateway":
@@ -309,6 +390,18 @@ def stream_path_label(state: RequestState) -> str:
 
 
 def caption_line(state: RequestState) -> str:
+    if state.stream_path == "denied":
+        return (
+            f"governance DENY · request_id={state.request_id or '—'} · "
+            f"{(state.error or 'denied')[:120]}"
+        )
+    if state.stream_path in ("mcp", "a2a"):
+        peer = (state.peer or {}).get("peer") or state.stream_path
+        return (
+            f"{state.stream_path.upper()} peer={peer} · "
+            f"request_id={state.request_id or '—'} · "
+            f"gov={'PASS' if (state.governance or {}).get('allowed') else '—'}"
+        )
     kind = (
         "content"
         if state.saw_content
@@ -331,9 +424,12 @@ def caption_line(state: RequestState) -> str:
         mode = "gateway SSE"
         if state.fallback:
             mode += " · fallback"
+    gov = ""
+    if state.phase == "phase2" and state.governance:
+        gov = f" · gov={'PASS' if state.governance.get('allowed') else 'DENY'}"
     return (
         f"routed model={state.model or '—'} · finish={state.finish or '—'} · "
-        f"{kind} · {mode}"
+        f"{kind} · {mode}{gov}"
     )
 
 

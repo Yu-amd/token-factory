@@ -35,8 +35,9 @@ def render_route_inspector(
     *,
     links: dict[str, str],
     html: HtmlFn,
+    phase: str = "phase1",
 ) -> None:
-    """Render inspector with live Decision / Policy / Metrics mini-tabs."""
+    """Render inspector with live Decision / Policy / Metrics (+ Governance in Phase 2)."""
     html(
         """
         <div class="tf-pg-insp-head">
@@ -44,24 +45,76 @@ def render_route_inspector(
         </div>
         """
     )
-    tab_dec, tab_pol, tab_met = st.tabs(["Decision", "Policy", "Metrics"])
+    if phase == "phase2":
+        tab_gov, tab_dec, tab_pol, tab_met = st.tabs(
+            ["Governance", "Routing", "Policy", "Metrics"]
+        )
+    else:
+        tab_gov = None
+        tab_dec, tab_pol, tab_met = st.tabs(["Decision", "Policy", "Metrics"])
+
+    if tab_gov is not None:
+        with tab_gov:
+            gov = state.governance or {}
+            html(
+                _kv_rows(
+                    [
+                        ("Request ID", state.request_id),
+                        ("Request type", state.request_type),
+                        ("AuthN", gov.get("authn")),
+                        ("AuthZ", gov.get("authz")),
+                        ("MCP policy", gov.get("mcp_policy")),
+                        ("A2A policy", gov.get("a2a_policy")),
+                        ("Quota", gov.get("quota")),
+                        (
+                            "Overall",
+                            "PASS" if gov.get("allowed") else ("DENY" if gov else None),
+                        ),
+                        ("Implementation", gov.get("implementation")),
+                        ("Mode", gov.get("mode")),
+                        ("Reason", gov.get("reason") or None),
+                    ]
+                )
+            )
+            if state.peer:
+                html(
+                    _kv_rows(
+                        [
+                            ("Peer", state.peer.get("peer")),
+                            ("Peer type", state.peer.get("request_type")),
+                            ("Peer latency", state.peer.get("latency_ms")),
+                            ("Trace ID", (state.peer.get("extras") or {}).get("trace_id")),
+                        ]
+                    )
+                )
+            html(
+                "<p class='tf-pg-insp-note'>Governance is separate from model routing. "
+                "MCP/A2A peers never pass through vLLM-SR.</p>"
+            )
 
     with tab_dec:
         conf = state.confidence
         conf_s = f"{conf:.4f}" if isinstance(conf, float) else None
+        routing = state.routing_decision or {}
         html(
             _kv_rows(
                 [
-                    ("Classification", state.classification),
-                    ("Confidence", conf_s),
-                    ("Route", state.route),
+                    ("Classification", state.classification or routing.get("intent")),
+                    ("Confidence", conf_s if conf_s else routing.get("confidence")),
+                    ("Route", state.route or routing.get("route")),
                     ("Domains", ", ".join(state.domains) if state.domains else None),
-                    ("Model", state.model),
+                    ("Model", state.model or routing.get("model")),
+                    ("Compute", state.compute or routing.get("compute")),
+                    ("Endpoint", routing.get("endpoint_id")),
                     ("Stream path", stream_path_label(state)),
                     ("Finish", state.finish),
                 ]
             )
         )
+        if state.request_type in ("mcp", "a2a"):
+            html(
+                "<p class='tf-pg-insp-note warn'>Model router not involved — peer branch.</p>"
+            )
         if state.fallback_reason:
             html(
                 f"<p class='tf-pg-insp-note warn'>Fallback: {_esc(state.fallback_reason)}</p>"

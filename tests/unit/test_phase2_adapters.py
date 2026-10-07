@@ -135,3 +135,21 @@ def test_endpoints_env_expand_loads():
     coding = next(e for e in eps["endpoints"] if e["id"] == "gpt-oss-120b-coding")
     assert coding["model"]
     assert isinstance(coding["port"], int)
+
+
+def test_svp_pack_loads_and_expand():
+    from token_factory.demo.loader import expand_requests, load_pack
+
+    pack = load_pack("svp")
+    assert pack["id"] == "svp"
+    assert len(pack["scenarios"]) == 5
+    specs = expand_requests(pack)
+    assert len(specs) == 5
+    types = {s.get("request_type") for s in specs}
+    assert "model" in types and "mcp" in types and "a2a" in types
+
+
+def test_adapter_fallback_force_mock():
+    bundle = resolve_adapters(force_mock=True)
+    assert bundle.agent_gateway.mode == "mock"
+    assert bundle.model_router.implementation == "mock"

@@ -23,6 +23,8 @@ from components.request_state import (  # noqa: E402
     mark_failed,
     mark_fallback,
     mark_first_token,
+    mark_governance,
+    mark_peer_complete,
     mark_streaming,
     new_request_state,
     stream_path_label,
@@ -125,3 +127,53 @@ def test_elapsed_ms_none_safe():
     assert elapsed_ms(None) is None
     t0 = time.perf_counter() - 0.01
     assert elapsed_ms(t0) >= 5
+
+
+def test_phase2_governance_deny_and_mcp_peer():
+    state = new_request_state(direct_stream=True)
+    mark_governance(
+        state,
+        {
+            "allowed": False,
+            "authn": "PASS",
+            "authz": "PASS",
+            "mcp_policy": "DENY",
+            "reason": "MCP policy denied tool",
+            "implementation": "mock",
+            "mode": "mock",
+        },
+        request_type="mcp",
+        request_id="rid-1",
+    )
+    assert state.stage == "failed"
+    assert state.stream_path == "denied"
+    assert state.nodes["agent_gw"].status == "failed"
+    assert "DENY" in stream_path_label(state) or "stopped" in stream_path_label(state)
+
+    state2 = new_request_state(direct_stream=True)
+    mark_governance(
+        state2,
+        {
+            "allowed": True,
+            "authn": "PASS",
+            "authz": "PASS",
+            "mcp_policy": "PASS",
+            "implementation": "mock",
+            "mode": "mock",
+        },
+        request_type="mcp",
+        request_id="rid-2",
+    )
+    mark_peer_complete(
+        state2,
+        {
+            "ok": True,
+            "peer": "demo-mcp-tools",
+            "request_type": "mcp",
+            "content": "ok",
+            "latency_ms": 3,
+        },
+    )
+    assert state2.stage == "complete"
+    assert state2.nodes["router"].detail == "not on path"
+    assert "MCP" in stream_path_label(state2)

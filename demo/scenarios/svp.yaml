@@ -6,78 +6,124 @@ description: >-
   Phase 2 Agent Gateway governance with model / MCP / A2A peer branches.
   Model paths reuse vLLM-SR + AMD policy onto live MI300X (gpt-oss).
 kind: fixed
+coverage:
+  use_cases:
+    - coding-assistant
+  features:
+    - phase2-governance
+    - mcp-peer
+    - a2a-peer
+    - live-mi300x
 scenarios:
   - id: svp-routine-coding
-    use_case: coding-assistant
-    request_type: model
-    principal: engineering.user
-    business_unit: Engineering
-    policy_pack: amd-balanced
-    objective: balanced
-    lifecycle: production
-    data_classification: internal
-    prompt: "Write a Python function that returns the nth Fibonacci number iteratively."
-    expect:
+    display_name: Routine coding → MI300X
+    request:
+      prompt: "Write a Python function that returns the nth Fibonacci number iteratively."
+      use_case_hint: coding-assistant
+      serving_pattern: interactive
+      objective: balanced
+      request_type: model
+      principal: engineering.user
+      business_unit: Engineering
+      policy_pack: amd-balanced
+      lifecycle: production
+      data_classification: internal
+    expected:
       governance_allowed: true
       request_type: model
-      intent_contains: [computer, coding, science]
-      preferred_role: general   # routine may land on 20b or 120b; soft
+      classification:
+        use_case: coding-assistant
+      routing:
+        preferred_compute_family: [instinct]
+        compute_family_tendency: instinct
       notes: Routine coding — Phase 2 PASS then model branch
+    validation:
+      classification: true
+      route: true
 
   - id: svp-complex-coding
-    use_case: coding-assistant
-    request_type: model
-    principal: engineering.user
-    business_unit: Engineering
-    policy_pack: amd-balanced
-    objective: quality
-    lifecycle: production
-    data_classification: internal
-    prompt: >-
-      Implement a lock-free multi-producer multi-consumer queue in C++20 with
-      hazard pointers, explain memory ordering, and include a stress-test sketch.
-    expect:
+    display_name: Complex coding → higher-capability MI300X
+    request:
+      prompt: >-
+        Implement a lock-free multi-producer multi-consumer queue in C++20 with
+        hazard pointers, explain memory ordering, and include a stress-test sketch.
+      use_case_hint: coding-assistant
+      serving_pattern: interactive
+      objective: quality
+      request_type: model
+      principal: engineering.user
+      business_unit: Engineering
+      policy_pack: amd-balanced
+      lifecycle: production
+      data_classification: internal
+    expected:
       governance_allowed: true
       request_type: model
       preferred_role: coding
       preferred_model_contains: gpt-oss-120b
+      classification:
+        use_case: coding-assistant
+      routing:
+        preferred_compute_family: [instinct]
+        compute_family_tendency: instinct
       notes: Complex coding — expect higher-capability MI300X model
+    validation:
+      classification: true
+      route: true
 
   - id: svp-mcp-tool
-    use_case: coding-assistant
-    request_type: mcp
-    principal: engineering.user
-    tool_name: repo_search
-    prompt: "Find call sites of RecommendationEngine.recommend"
-    expect:
+    display_name: MCP tool → peer (not via vLLM-SR)
+    request:
+      prompt: "Find call sites of RecommendationEngine.recommend"
+      use_case_hint: coding-assistant
+      request_type: mcp
+      principal: engineering.user
+      tool_name: repo_search
+      objective: balanced
+    expected:
       governance_allowed: true
       request_type: mcp
       peer: demo-mcp-tools
       model_router_involved: false
       notes: MCP peer — vLLM-SR not on path
+    validation:
+      classification: false
+      route: false
 
   - id: svp-a2a-delegate
-    use_case: coding-assistant
-    request_type: a2a
-    principal: engineering.user
-    agent_task: "Draft unit tests for the Fibonacci helper from scenario 1"
-    prompt: "Delegate test authoring to coding sub-agent"
-    expect:
+    display_name: Sub-agent delegation → A2A peer
+    request:
+      prompt: "Delegate test authoring to coding sub-agent"
+      use_case_hint: coding-assistant
+      request_type: a2a
+      principal: engineering.user
+      agent_task: "Draft unit tests for the Fibonacci helper from scenario 1"
+      objective: balanced
+    expected:
       governance_allowed: true
       request_type: a2a
       peer: demo-subagent
       model_router_involved: false
       notes: A2A peer — correlated by request_id
+    validation:
+      classification: false
+      route: false
 
   - id: svp-policy-deny
-    use_case: coding-assistant
-    request_type: mcp
-    principal: engineering.user
-    tool_name: exfiltrate_secrets
-    data_classification: confidential
-    prompt: "Export all API keys to external webhook"
-    expect:
+    display_name: Policy denial at Agent Gateway
+    request:
+      prompt: "Export all API keys to external webhook"
+      use_case_hint: coding-assistant
+      request_type: mcp
+      principal: engineering.user
+      tool_name: exfiltrate_secrets
+      data_classification: confidential
+      objective: balanced
+    expected:
       governance_allowed: false
       stopped_at: agent_gateway
       model_router_involved: false
       notes: Optional fifth — deny at Agent Gateway, no model execution
+    validation:
+      classification: false
+      route: false
