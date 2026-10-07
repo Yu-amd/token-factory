@@ -49,9 +49,63 @@ def render_route_inspector(
         tab_gov, tab_dec, tab_pol, tab_met = st.tabs(
             ["Governance", "Routing", "Policy", "Metrics"]
         )
+        tab_t1 = tab_t2 = None
     else:
         tab_gov = None
-        tab_dec, tab_pol, tab_met = st.tabs(["Decision", "Policy", "Metrics"])
+        tab_t1, tab_t2, tab_dec, tab_pol, tab_met = st.tabs(
+            ["Tier 1", "Tier 2", "Decision", "Policy", "Metrics"]
+        )
+
+    if tab_t1 is not None:
+        with tab_t1:
+            t1 = state.tier1 or {}
+            html(
+                _kv_rows(
+                    [
+                        ("Request ID", t1.get("request_id") or state.request_id),
+                        ("Provider", t1.get("provider")),
+                        ("Model", t1.get("model") or state.model),
+                        ("Auth", t1.get("auth") or "not enabled"),
+                        ("Quota", t1.get("quota") or "not enabled"),
+                        ("Fallback policy", t1.get("fallback_policy")),
+                        ("Route", t1.get("route") or state.route),
+                        ("Classification", t1.get("classification") or state.classification),
+                    ]
+                )
+            )
+            html(
+                "<p class='tf-pg-insp-note'>Logical Tier 1 (Provider Gateway label) — "
+                "model selection via vLLM-SR. Gateway auth/rate limits are "
+                "<strong>not enabled</strong> unless verify shows PASS.</p>"
+            )
+        with tab_t2:
+            t2 = state.tier2 or {}
+            html(
+                _kv_rows(
+                    [
+                        ("Compute", t2.get("compute") or state.compute),
+                        ("Endpoint", t2.get("endpoint")),
+                        ("Load signal", t2.get("load_signal") or "not enabled"),
+                        ("Cache signal", t2.get("cache_signal") or "not enabled"),
+                        ("KV-cache aware", t2.get("kv_cache_aware") or "not enabled"),
+                        ("Prefix-cache aware", t2.get("prefix_cache_aware") or "not enabled"),
+                        ("P/D disaggregation", t2.get("pd_disaggregation") or "not enabled"),
+                        ("Serving pattern", t2.get("serving_pattern") or state.serving_pattern),
+                        (
+                            "Health latency",
+                            f"{t2['health_latency_ms']} ms"
+                            if t2.get("health_latency_ms") is not None
+                            else None,
+                        ),
+                    ]
+                )
+            )
+            html(
+                "<p class='tf-pg-insp-note'>Logical Tier 2 (Inference Gateway label) — "
+                "endpoint placement. Load/KV/prefix/P-D show "
+                "<strong>not enabled</strong> when not on the live path "
+                "(never fabricated).</p>"
+            )
 
     if tab_gov is not None:
         with tab_gov:

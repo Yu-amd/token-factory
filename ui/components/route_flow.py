@@ -118,7 +118,7 @@ def render_route_flow_html(
     phase_title = (
         "Phase 2 — govern model + tool + sub-agent"
         if phase == "phase2"
-        else "Phase 1 — govern model placement"
+        else "Phase 1 — logical Tier 1 (provider/model) + Tier 2 (placement)"
     )
     branch_note = ""
     if phase == "phase2":
@@ -129,12 +129,25 @@ def render_route_flow_html(
             "<strong>A2A</strong> → SUB-AGENT "
             "(MCP/A2A never under vLLM-SR)</p>"
         )
+    elif phase == "phase1":
+        t1 = (state.tier1 or {}).get("model") or "—"
+        t2 = (state.tier2 or {}).get("endpoint") or "—"
+        branch_note = (
+            '<p class="tf-pg-flow-hint">'
+            "<strong>Tier 1</strong> provider/model · "
+            f"model=<code>{_esc(t1)}</code> · auth/quota=<em>not enabled</em> · "
+            "<strong>Tier 2</strong> placement · "
+            f"endpoint=<code>{_esc(t2)}</code> · "
+            "KV/prefix/P-D=<em>not enabled</em> "
+            "(no MCP in Phase 1)</p>"
+        )
 
     idle_hint = ""
-    if state.stage == "idle" and phase != "phase2":
+    if state.stage == "idle" and phase == "phase1" and not (state.tier1 or state.tier2):
         idle_hint = (
             '<p class="tf-pg-flow-hint">Send a prompt — classification, policy, and '
-            "stream path light up stage-by-stage.</p>"
+            "stream path light up stage-by-stage. Tier 1/Tier 2 are logical labels "
+            "over one Envoy + vLLM-SR path.</p>"
         )
 
     return f"""

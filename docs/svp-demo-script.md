@@ -15,6 +15,9 @@
 make ports
 make ui   # http://localhost:8501  (LAN: http://<host-ip>:8501)
 # Grafana :3001  SR dashboard :8700
+# Honest Phase 1 architecture check (run before SVP)
+token-factory verify phase1 --live
+
 token-factory demo plan --pack svp
 ```
 
@@ -67,6 +70,19 @@ curl -sS http://$MI300X_GENERAL_HOST:8000/v1/models | head
 ## Closing line
 
 “Phase 1 places models on AMD Instinct. Phase 2 governs the agent graph — models, tools, and sub-agents as peers — with open-source defaults and replaceable adapters.”
+
+## Phase 1 honesty check (before SVP)
+
+```bash
+token-factory verify phase1 --live
+```
+
+Expect **Overall demo readiness: PASS WITH LIMITATIONS**. Green items must be
+true; KV/prefix/P-D, rate limiting, and gateway auth show **NOT ENABLED**.
+Same-model failover shows **CONFIGURED** when the 20b spare is in inventory;
+cross-model fallback stays **NOT PROVEN**.
+
+See [phase1-architecture-gap.md](phase1-architecture-gap.md).
 
 ## Fallback if something is red
 

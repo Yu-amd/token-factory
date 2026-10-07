@@ -91,6 +91,8 @@ class RequestState:
     governance: dict[str, Any] | None = None
     peer: dict[str, Any] | None = None
     routing_decision: dict[str, Any] | None = None
+    tier1: dict[str, Any] | None = None
+    tier2: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         raw = asdict(self)

@@ -6,7 +6,10 @@ policy:
   priority_mode: balanced
   fallback:
     enabled: true
+    # Same-model secondary (20b spare) can become AIGW priority>0.
+    # Cross-model entries (120b) are policy intent only — NOT emitted as failover refs.
     chain:
+    - gpt-oss-20b-spare
     - gpt-oss-20b-general
     - gpt-oss-120b-coding
   routes:

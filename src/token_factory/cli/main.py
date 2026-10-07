@@ -44,8 +44,12 @@ policy_app = typer.Typer(help="AMD Canonical Routing Policy commands")
 demo_app = typer.Typer(
     help="Automated Demo — routing-policy & observability validation (not a benchmark)"
 )
+verify_app = typer.Typer(
+    help="Architecture verification (honest PASS / NOT ENABLED / NOT PROVEN)"
+)
 app.add_typer(policy_app, name="policy")
 app.add_typer(demo_app, name="demo")
+app.add_typer(verify_app, name="verify")
 console = Console()
 
 
@@ -270,9 +274,11 @@ def compile_cmd(
         console.print(f"Wrote {name}: {path}")
 
 
-@app.command()
-def verify() -> None:
-    """Verify deployed resources."""
+@verify_app.callback(invoke_without_command=True)
+def verify_callback(ctx: typer.Context) -> None:
+    """Default: kubectl deployment presence checks (legacy)."""
+    if ctx.invoked_subcommand is not None:
+        return
     checks = [
         ("deployment", "envoy-gateway-system", "envoy-gateway"),
         ("deployment", "envoy-ai-gateway-system", "ai-gateway-controller"),
@@ -292,6 +298,38 @@ def verify() -> None:
         else:
             console.print(f"[green]OK[/green] {ns}/{name}")
     if failed:
+        raise typer.Exit(1)
+
+
+@verify_app.command("phase1")
+def verify_phase1_cmd(
+    live: bool = typer.Option(
+        False,
+        "--live",
+        help="Probe gateway, SR classify, and MI300X through the real request path",
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Machine-readable report"),
+) -> None:
+    """Honest Phase 1 two-tier architecture verification for SVP demos."""
+    from token_factory.phase1.verify import verify_phase1
+
+    report = verify_phase1(live=live)
+    if json_out:
+        console.print_json(
+            data={
+                "overall": report.overall,
+                "live": report.live,
+                "checks": [
+                    {"name": c.name, "status": c.status, "detail": c.detail}
+                    for c in report.checks
+                ],
+                "tier1": report.tier1,
+                "tier2": report.tier2,
+            }
+        )
+    else:
+        console.print(report.render())
+    if report.overall.startswith("FAIL"):
         raise typer.Exit(1)
 
 

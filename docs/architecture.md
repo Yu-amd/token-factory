@@ -50,14 +50,19 @@ See [amd-routing-matrix.md](amd-routing-matrix.md).
 ## Request flow
 
 1. Client POST `/v1/chat/completions` with `model: token-factory/auto`
-2. Envoy AI Gateway applies auth, rate limits, extproc hook
-3. Semantic Router classifies domain → sets `x-ai-eg-model` (LoRA route)
+2. Envoy AI Gateway applies **extproc** to vLLM-SR (auth/rate-limit CRs are **not** compiled today)
+3. Semantic Router classifies domain → sets `x-ai-eg-model` (LoRA / model route)
 4. AIGatewayRoute maps header → AIServiceBackend → OpenAI-compatible endpoint
 5. Metrics exported to Prometheus; dashboards in Grafana and SR dashboard (:8700)
 
 ## Phase 1 — Two-Tier vLLM-SR AI Gateway Blueprint
 
 **Governs where model requests run.**
+
+The slide’s **Tier 1 (Provider Gateway)** and **Tier 2 (Inference Gateway)** are
+**logical labels** over a single Envoy AI Gateway + vLLM-SR path — not separate
+runtimes. Token Factory emits honest decision objects so the demo never paints
+unwired features as live. Full audit: [phase1-architecture-gap.md](phase1-architecture-gap.md).
 
 ```text
 Client / application
@@ -66,10 +71,20 @@ Client / application
 Ingress / AI Gateway (Envoy AI Gateway)          ← live OSS (pluggable)
         │
         ▼
-vLLM Semantic Router — model-routing path        ← live OSS (pluggable)
-   ├─ provider/model routing
-   ├─ AMD policy / model × compute selection     ← Token Factory canonical policy
-   └─ inference optimization
+Logical Tier 1 — Provider / model decision       ← vLLM-SR classify + AMD policy
+   ├─ provider/model selection                   ← LIVE
+   ├─ upstream/provider auth                     ← NOT ENABLED (no SecurityPolicy)
+   ├─ token/rate controls                        ← NOT ENABLED
+   ├─ same-model endpoint failover               ← CONFIGURED when spare shares model
+   └─ cross-model fallback                       ← NOT PROVEN
+        │
+        ▼
+Logical Tier 2 — Inference placement             ← compile-time route → endpoint
+   ├─ endpoint / compute selection               ← LIVE (static map + health probe)
+   ├─ load-aware routing                         ← NOT ENABLED
+   ├─ KV-cache awareness                         ← NOT ENABLED
+   ├─ prefix-cache awareness                     ← NOT ENABLED
+   └─ P/D disaggregation                         ← NOT ENABLED
         │
         ▼
 execution targets
@@ -80,6 +95,12 @@ execution targets
 Playground Phase 1 live flow:
 
 `CLIENT → AI GATEWAY → vLLM-SR → AMD POLICY → MODEL / MI300X`
+
+Verify honesty before an executive demo:
+
+```bash
+token-factory verify phase1 --live
+```
 
 ## Phase 2 — Agent Gateway + Semantic Routing Blueprint
 

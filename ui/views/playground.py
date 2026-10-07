@@ -656,6 +656,76 @@ def _optional_recommendation(
         return {"use_case": use_case}
 
 
+def _attach_phase1_tiers(
+    state: RequestState,
+    *,
+    model_id: str | None,
+    route_name: str | None,
+    classification: str | None,
+    confidence: float | None,
+    endpoint: dict[str, Any] | None,
+    serving_pattern: str | None,
+) -> None:
+    """Populate honest Tier1/Tier2 decision objects (Phase 1 only)."""
+    try:
+        src = _repo_src()
+        if src not in sys.path:
+            sys.path.insert(0, src)
+        from token_factory.config.loader import load_policies
+        from token_factory.phase1.decisions import build_phase1_decisions
+
+        ep = endpoint or {}
+        host, port = ep.get("host"), ep.get("port") or 8000
+        url = f"http://{host}:{port}" if host else None
+        health_ms = None
+        if url:
+            try:
+                from token_factory.adapters.model_endpoint import OpenAIModelEndpointAdapter
+
+                h = OpenAIModelEndpointAdapter(timeout=4.0).health(
+                    base_url=url, model=model_id or ep.get("model")
+                )
+                if h.reachable:
+                    health_ms = h.latency_ms
+            except Exception:
+                health_ms = None
+        compute = " · ".join(
+            p for p in (ep.get("hardware"), ep.get("accelerator")) if p
+        ) or ep.get("accelerator")
+        t1, t2 = build_phase1_decisions(
+            request_id=state.request_id,
+            model=model_id,
+            route=route_name,
+            classification=classification,
+            confidence=confidence,
+            compute=compute,
+            endpoint_id=ep.get("id"),
+            endpoint_url=url,
+            serving_pattern=serving_pattern,
+            health_latency_ms=health_ms,
+            policies=load_policies(),
+        )
+        state.tier1 = t1.to_dict()
+        state.tier2 = t2.to_dict()
+        state.request_id = t1.request_id
+    except Exception:
+        state.tier1 = {
+            "provider": "on-prem-amd",
+            "model": model_id,
+            "auth": "not enabled",
+            "quota": "not enabled",
+            "fallback_policy": "not enabled",
+        }
+        state.tier2 = {
+            "compute": (endpoint or {}).get("accelerator"),
+            "endpoint": (endpoint or {}).get("id"),
+            "load_signal": "not enabled",
+            "kv_cache_aware": "not enabled",
+            "prefix_cache_aware": "not enabled",
+            "pd_disaggregation": "not enabled",
+        }
+
+
 def render_playground_tab(
     *,
     meta: dict[str, Any],
@@ -978,6 +1048,17 @@ def render_playground_tab(
                                     "endpoint_id": (ep or {}).get("id"),
                                 }
                             )
+                            if phase == "phase1":
+                                _attach_phase1_tiers(
+                                    state,
+                                    model_id=model_id,
+                                    route_name=route_name,
+                                    classification=state.classification,
+                                    confidence=state.confidence,
+                                    endpoint=ep,
+                                    serving_pattern=state.serving_pattern
+                                    or rec.get("serving_pattern"),
+                                )
                             status.caption(f"Routed {route_name} · opening stream…")
                         elif name == "fallback":
                             mark_fallback(

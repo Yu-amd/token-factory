@@ -27,6 +27,21 @@ endpoints:
     tags: [general, fast, live]
     description: GPT-OSS 20B on MI300X — routine / general path (env-configured)
 
+  # Same-model replica for AIGW priority failover (general path only).
+  # Cross-model failover is NOT claimed — compiler only emits same-model secondary refs.
+  - id: gpt-oss-20b-spare
+    host: ${MI300X_SPARE_HOST:-129.212.177.138}
+    port: ${MI300X_SPARE_PORT:-8000}
+    model: ${MI300X_SPARE_MODEL:-openai/gpt-oss-20b}
+    role: general
+    hardware: instinct
+    accelerator: MI300X
+    aim_support: optimized
+    weight: 1
+    enabled: true
+    tags: [general, spare, same-model-failover, live]
+    description: GPT-OSS 20B spare MI300X — same-model secondary for general_route
+
   - id: mock-reasoning
     host: token-factory-mock-reasoning.token-factory.svc.cluster.local
     port: 8000
