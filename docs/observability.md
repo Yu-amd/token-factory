@@ -89,7 +89,7 @@ titles include **Runtime escalation (preferred unavailable)**.
 
 ```bash
 make ports
-# Grafana http://localhost:3000 (admin/admin)
+# Grafana http://localhost:3001 (admin/admin) — local port 3001 avoids host :3000 clashes
 # Prometheus http://localhost:9090  → Status → Targets should show
 #   envoy-gateway + semantic-router + token-factory-demo UP (demo job needs make ui)
 ```

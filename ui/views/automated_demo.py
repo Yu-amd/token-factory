@@ -343,7 +343,7 @@ def _render_history_and_links(
     list_recent_runs: Callable[..., list],
 ) -> None:
     dash = links.get("semantic_router_dashboard", "http://localhost:8700")
-    graf = links.get("grafana", "http://localhost:3000")
+    graf = links.get("grafana", "http://localhost:3001")
     prom = links.get("prometheus", "http://localhost:9090")
     html(
         f"""

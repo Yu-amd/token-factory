@@ -63,7 +63,7 @@ def status() -> None:
     gateway = os.environ.get("TF_GATEWAY_URL", "http://127.0.0.1:18080")
     sr_api = os.environ.get("TF_SR_URL", "http://127.0.0.1:8081")
     dashboard = os.environ.get("TF_SR_DASHBOARD_URL", "http://localhost:8700")
-    grafana = os.environ.get("TF_GRAFANA_URL", "http://localhost:3000")
+    grafana = os.environ.get("TF_GRAFANA_URL", "http://localhost:3001")
     prometheus = os.environ.get("TF_PROMETHEUS_URL", "http://localhost:9090")
 
     probes = [
@@ -153,7 +153,7 @@ def dashboard() -> None:
 @app.command()
 def grafana() -> None:
     """Show Grafana URL."""
-    url = os.environ.get("TF_GRAFANA_URL", "http://localhost:3000")
+    url = os.environ.get("TF_GRAFANA_URL", "http://localhost:3001")
     console.print(f"Grafana: {url} (default credentials admin/admin)")
 
 

@@ -1,9 +1,10 @@
 version: "1"
+# Example inventory — prefer env placeholders (see config/.env.example).
 endpoints:
   - id: gpt-oss-120b-coding
-    host: 129.212.183.201
-    port: 8000
-    model: openai/gpt-oss-120b
+    host: ${MI300X_CODING_HOST:-127.0.0.1}
+    port: ${MI300X_CODING_PORT:-8000}
+    model: ${MI300X_CODING_MODEL:-openai/gpt-oss-120b}
     role: coding
     hardware: instinct
     accelerator: MI300X
@@ -11,12 +12,12 @@ endpoints:
     weight: 1
     enabled: true
     tags: [coding, reasoning, flagship]
-    description: GPT-OSS 120B FP8 on MI300X — coding, software engineering, reasoning fallback
+    description: GPT-OSS 120B on MI300X — coding / complex path
 
   - id: gpt-oss-20b-general
-    host: 165.245.136.245
-    port: 8000
-    model: openai/gpt-oss-20b
+    host: ${MI300X_GENERAL_HOST:-127.0.0.1}
+    port: ${MI300X_GENERAL_PORT:-8000}
+    model: ${MI300X_GENERAL_MODEL:-openai/gpt-oss-20b}
     role: general
     hardware: instinct
     accelerator: MI300X
@@ -24,7 +25,7 @@ endpoints:
     weight: 1
     enabled: true
     tags: [general, fast]
-    description: GPT-OSS 20B FP8 on MI300X for general knowledge queries
+    description: GPT-OSS 20B on MI300X — routine / general path
 
   - id: mock-reasoning
     host: token-factory-mock-reasoning.token-factory.svc.cluster.local

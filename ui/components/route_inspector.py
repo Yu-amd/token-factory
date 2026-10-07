@@ -104,7 +104,7 @@ def render_route_inspector(
                 ]
             )
         )
-        g_url = links.get("grafana") or "http://127.0.0.1:3000"
+        g_url = links.get("grafana") or "http://127.0.0.1:3001"
         d_url = links.get("semantic_router_dashboard") or "http://localhost:8700"
         html(
             f"""

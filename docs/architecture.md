@@ -55,6 +55,71 @@ See [amd-routing-matrix.md](amd-routing-matrix.md).
 4. AIGatewayRoute maps header → AIServiceBackend → OpenAI-compatible endpoint
 5. Metrics exported to Prometheus; dashboards in Grafana and SR dashboard (:8700)
 
+## Phase 1 — Two-Tier vLLM-SR AI Gateway Blueprint
+
+**Governs where model requests run.**
+
+```text
+Client / application
+        │
+        ▼
+Ingress / AI Gateway (Envoy AI Gateway)          ← live OSS (pluggable)
+        │
+        ▼
+vLLM Semantic Router — model-routing path        ← live OSS (pluggable)
+   ├─ provider/model routing
+   ├─ AMD policy / model × compute selection     ← Token Factory canonical policy
+   └─ inference optimization
+        │
+        ▼
+execution targets
+   ├─ MI300X / AMD Instinct hosted models        ← live AIM / OpenAI-compatible
+   └─ optional frontier / SaaS model endpoints   ← pluggable later
+```
+
+Playground Phase 1 live flow:
+
+`CLIENT → AI GATEWAY → vLLM-SR → AMD POLICY → MODEL / MI300X`
+
+## Phase 2 — Agent Gateway + Semantic Routing Blueprint
+
+**Governs the broader agent execution graph.** vLLM-SR remains on the **model** branch only.
+MCP servers and sub-agents are **peer** execution targets of Agent Gateway — never under vLLM-SR.
+
+```text
+Client / agent
+        │
+        ▼
+Agent Gateway                                         ← mock/demo (Friday) · agentgateway later
+   ├─ AuthN / AuthZ
+   ├─ quotas / rate limits
+   ├─ policy enforcement
+   ├─ tracing / observability
+   ├─ MCP / A2A governance
+   └─ provider auth
+        │
+        ├── MODEL REQUEST ──► vLLM Semantic Router
+        │                         ├─ intent / classification
+        │                         ├─ capability / economics
+        │                         ├─ AMD lifecycle / policy
+        │                         └─ endpoint selection → MI300X / frontier
+        │
+        ├── MCP REQUEST ──► MCP servers               ← peer (not under vLLM-SR)
+        │
+        └── A2A REQUEST ──► sub-agents                ← peer (not under vLLM-SR)
+```
+
+| Component | Friday status | Notes |
+|-----------|---------------|--------|
+| Envoy AI Gateway | live OSS | replaceable via `GatewayAdapter` |
+| vLLM Semantic Router | live OSS | replaceable via `ModelRouterAdapter` |
+| Agent Gateway | **mock/demo** | same interface → agentgateway / commercial later |
+| MI300X AIM endpoints | live | env-configured `execution_targets` / `endpoints.yaml` |
+| MCP / A2A peers | mock/open demo | peer adapters; not under SR |
+| Prometheus + Grafana | live OSS | Phase 1 + Phase 2 counters |
+
+See [svp-demo-plan.md](svp-demo-plan.md) for adapter contracts, SVP script, and P0/P1/P2.
+
 ### Streaming caveat
 
 OpenAI `stream: true` through Envoy AI Gateway v0.4.0 typically **buffers the full

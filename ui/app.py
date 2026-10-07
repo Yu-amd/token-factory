@@ -820,7 +820,7 @@ probe_defs = [
     ("Gateway", GATEWAY, "/v1/models"),
     ("SR API", links.get("semantic_router_api", "http://localhost:8081"), "/health"),
     ("SR Dashboard", links.get("semantic_router_dashboard", "http://localhost:8700"), "/"),
-    ("Grafana", links.get("grafana", "http://localhost:3000"), "/api/health"),
+    ("Grafana", links.get("grafana", "http://localhost:3001"), "/api/health"),
     ("Prometheus", links.get("prometheus", "http://localhost:9090"), "/-/healthy"),
 ]
 # Bulky global status tiles removed — Playground owns the compact health strip.
@@ -1627,7 +1627,7 @@ with tab_pol:
 
 with tab_ops:
     dash = links.get("semantic_router_dashboard", "http://localhost:8700")
-    graf = links.get("grafana", "http://localhost:3000")
+    graf = links.get("grafana", "http://localhost:3001")
     prom = links.get("prometheus", "http://localhost:9090")
     html(
         f"""

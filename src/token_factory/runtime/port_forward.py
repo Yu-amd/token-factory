@@ -17,6 +17,9 @@ STATE_FILE = "port-forwards.json"
 SR_NAMESPACE = "vllm-semantic-router-system"
 DASHBOARD_PORT_DEFAULT = 8700
 DASHBOARD_PORT_ALTERNATES = (8701, 8702, 8703)
+# Bind for LAN access (other devices on Wi‑Fi). Override with TF_PORT_FORWARD_ADDRESS=127.0.0.1
+# for localhost-only.
+PORT_FORWARD_ADDRESS = os.environ.get("TF_PORT_FORWARD_ADDRESS", "0.0.0.0")
 
 
 @dataclass
@@ -31,6 +34,8 @@ class PortForwardSpec:
 # Local gateway port is 18080 — avoid clash with kind hostPort 0.0.0.0:8080 on older
 # clusters (IPv4 localhost then resets while kubectl PF only binds [::1]:8080).
 GATEWAY_LOCAL_PORT = int(os.environ.get("TF_GATEWAY_LOCAL_PORT", "18080"))
+# Default 3001 — host :3000 is often taken by other Docker UIs on developer machines.
+GRAFANA_LOCAL_PORT = int(os.environ.get("TF_GRAFANA_LOCAL_PORT", "3001"))
 
 DEFAULT_FORWARDS: list[PortForwardSpec] = [
     PortForwardSpec(
@@ -44,7 +49,7 @@ DEFAULT_FORWARDS: list[PortForwardSpec] = [
         DASHBOARD_PORT_DEFAULT,
         8700,
     ),
-    PortForwardSpec("grafana", "observability", "grafana", 3000, 3000),
+    PortForwardSpec("grafana", "observability", "grafana", GRAFANA_LOCAL_PORT, 3000),
     PortForwardSpec("prometheus", "observability", "prometheus", 9090, 9090),
 ]
 
@@ -178,7 +183,7 @@ def _start_one_forward(
         "kubectl",
         "port-forward",
         "--address",
-        "127.0.0.1",
+        PORT_FORWARD_ADDRESS,
         "-n",
         spec.namespace,
         f"svc/{svc}",
@@ -197,6 +202,7 @@ def _start_one_forward(
         "service": svc,
         "local_port": spec.local_port,
         "remote_port": spec.remote_port,
+        "bind_address": PORT_FORWARD_ADDRESS,
         "pid": proc.pid,
         "started_at": int(time.time()),
     }
@@ -305,10 +311,11 @@ def list_forwards() -> list[dict[str, Any]]:
 def _port_available(port: int) -> bool:
     import socket
 
+    bind_host = PORT_FORWARD_ADDRESS if PORT_FORWARD_ADDRESS not in ("", "localhost") else "127.0.0.1"
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            sock.bind(("127.0.0.1", port))
+            sock.bind((bind_host, port))
             return True
         except OSError:
             return False

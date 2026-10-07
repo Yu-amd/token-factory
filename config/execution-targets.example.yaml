@@ -1,0 +1,79 @@
+# Execution targets — models / MCP / A2A peers (env-expanded).
+# Copy values into a local .env (never commit secrets). See docs/svp-demo-plan.md.
+version: "2"
+
+adapters:
+  gateway:
+    implementation: envoy_ai_gateway
+    fallback: mock
+  agent_gateway:
+    implementation: mock          # Friday default; swap to agentgateway when stable
+    fallback: mock
+  model_router:
+    implementation: vllm_semantic_router
+    fallback: mock
+  model_endpoint:
+    implementation: openai_compatible
+  mcp:
+    implementation: demo_mcp
+    fallback: mock
+  subagent:
+    implementation: demo_a2a
+    fallback: mock
+  telemetry:
+    implementation: prometheus_file
+
+execution_targets:
+  - id: mi300x-coding
+    type: model
+    provider: amd
+    compute: MI300X
+    protocol: openai
+    endpoint: ${MI300X_CODING_ENDPOINT}
+    model: ${MI300X_CODING_MODEL:-openai/gpt-oss-120b}
+    role: coding
+    aim_support: optimized
+    enabled: true
+
+  - id: mi300x-general
+    type: model
+    provider: amd
+    compute: MI300X
+    protocol: openai
+    endpoint: ${MI300X_GENERAL_ENDPOINT}
+    model: ${MI300X_GENERAL_MODEL:-openai/gpt-oss-20b}
+    role: general
+    aim_support: optimized
+    enabled: true
+
+  - id: mi300x-spare
+    type: model
+    provider: amd
+    compute: MI300X
+    protocol: openai
+    endpoint: ${MI300X_SPARE_ENDPOINT}
+    model: ${MI300X_SPARE_MODEL:-openai/gpt-oss-20b}
+    role: general
+    aim_support: optimized
+    enabled: false
+
+  - id: demo-mcp-tools
+    type: mcp
+    protocol: mcp
+    endpoint: ${MCP_ENDPOINT:-mock://demo-mcp}
+    mode: mock
+    enabled: true
+
+  - id: demo-subagent
+    type: a2a
+    protocol: a2a
+    endpoint: ${A2A_ENDPOINT:-mock://demo-a2a}
+    mode: mock
+    enabled: true
+
+request_defaults:
+  principal: engineering.user
+  business_unit: Engineering
+  policy_pack: amd-balanced
+  lifecycle: production
+  objective: balanced

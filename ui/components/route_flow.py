@@ -7,13 +7,25 @@ from typing import Any
 
 from components.request_state import RequestState, stream_path_label
 
-NODE_ORDER = (
+NODE_ORDER_PHASE1 = (
     ("client", "CLIENT"),
-    ("gateway", "ENVOY AI GATEWAY"),
-    ("router", "vLLM SEMANTIC ROUTER"),
+    ("gateway", "AI GATEWAY"),
+    ("router", "vLLM-SR"),
     ("policy", "AMD POLICY"),
-    ("aim", "AIM / AMD COMPUTE"),
+    ("aim", "MODEL / MI300X"),
 )
+
+# Phase 2 primary spine; branch labels shown in subtitle (MCP/A2A are peers, not under SR).
+NODE_ORDER_PHASE2 = (
+    ("client", "CLIENT / AGENT"),
+    ("agent_gw", "AGENT GATEWAY"),
+    ("router", "vLLM-SR (model)"),
+    ("policy", "AMD POLICY"),
+    ("aim", "MI300X / FRONTIER"),
+)
+
+# Back-compat alias
+NODE_ORDER = NODE_ORDER_PHASE1
 
 
 def _esc(value: Any) -> str:
@@ -39,11 +51,20 @@ def _connector_class(left: str, right: str) -> str:
     return "tf-pg-conn"
 
 
-def render_route_flow_html(state: RequestState, *, selected: str | None = None) -> str:
+def render_route_flow_html(
+    state: RequestState,
+    *,
+    selected: str | None = None,
+    phase: str = "phase1",
+) -> str:
     """Return HTML for the persistent live flow (~80–110px)."""
+    order = NODE_ORDER_PHASE2 if phase == "phase2" else NODE_ORDER_PHASE1
     nodes_html: list[str] = []
-    for idx, (nid, label) in enumerate(NODE_ORDER):
-        node = state.nodes.get(nid)
+    for idx, (nid, label) in enumerate(order):
+        # Phase 1 gateway node id remains "gateway"; Phase 2 uses agent_gw with fallback
+        node = state.nodes.get(nid) or (
+            state.nodes.get("gateway") if nid == "agent_gw" else None
+        )
         status = node.status if node else "idle"
         detail = (node.detail if node else "") or ""
         if not detail and status == "idle":
@@ -56,10 +77,13 @@ def render_route_flow_html(state: RequestState, *, selected: str | None = None) 
             f'<span class="tf-pg-node-detail">{_esc(detail)}</span>'
             f"</div>"
         )
-        if idx < len(NODE_ORDER) - 1:
-            nxt = NODE_ORDER[idx + 1][0]
-            left_s = state.nodes.get(nid).status if state.nodes.get(nid) else "idle"
-            right_s = state.nodes.get(nxt).status if state.nodes.get(nxt) else "idle"
+        if idx < len(order) - 1:
+            nxt = order[idx + 1][0]
+            left_s = status
+            right_node = state.nodes.get(nxt) or (
+                state.nodes.get("gateway") if nxt == "agent_gw" else None
+            )
+            right_s = right_node.status if right_node else "idle"
             nodes_html.append(
                 f'<div class="{_connector_class(left_s, right_s)}" aria-hidden="true">'
                 f'<span class="tf-pg-conn-line"></span></div>'
@@ -91,8 +115,23 @@ def render_route_flow_html(state: RequestState, *, selected: str | None = None) 
         else ""
     )
 
+    phase_title = (
+        "Phase 2 — govern model + tool + sub-agent"
+        if phase == "phase2"
+        else "Phase 1 — govern model placement"
+    )
+    branch_note = ""
+    if phase == "phase2":
+        branch_note = (
+            '<p class="tf-pg-flow-hint">Peers from Agent Gateway: '
+            "<strong>MODEL</strong> → vLLM-SR → AMD POLICY → MI300X · "
+            "<strong>MCP</strong> → MCP SERVER · "
+            "<strong>A2A</strong> → SUB-AGENT "
+            "(MCP/A2A never under vLLM-SR)</p>"
+        )
+
     idle_hint = ""
-    if state.stage == "idle":
+    if state.stage == "idle" and phase != "phase2":
         idle_hint = (
             '<p class="tf-pg-flow-hint">Send a prompt — classification, policy, and '
             "stream path light up stage-by-stage.</p>"
@@ -101,12 +140,13 @@ def render_route_flow_html(state: RequestState, *, selected: str | None = None) 
     return f"""
     <div class="tf-pg-flow" role="group" aria-label="Live request flow">
       <div class="tf-pg-flow-meta">
-        <span class="tf-pg-flow-title">Live flow</span>
+        <span class="tf-pg-flow-title">{_esc(phase_title)}</span>
         {badge}
         <span class="tf-pg-flow-path">{_esc(path_note)}</span>
         {timing_html}
       </div>
       <div class="tf-pg-flow-track">{"".join(nodes_html)}</div>
+      {branch_note}
       {idle_hint}
     </div>
     """

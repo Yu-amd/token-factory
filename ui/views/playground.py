@@ -579,6 +579,10 @@ def render_playground_tab(
         st.session_state.pg_selected_node = None
     if "pg_active_prompt" not in st.session_state:
         st.session_state.pg_active_prompt = None
+    if "pg_phase" not in st.session_state:
+        st.session_state.pg_phase = "phase1"
+    if "pg_governance" not in st.session_state:
+        st.session_state.pg_governance = None
     # Legacy sample-button key → active prompt (one-shot migrate).
     if st.session_state.get("pg_pending_prompt") and not st.session_state.pg_active_prompt:
         st.session_state.pg_active_prompt = st.session_state.pg_pending_prompt
@@ -598,6 +602,16 @@ def render_playground_tab(
         """
     )
 
+    phase_label = st.radio(
+        "Architecture phase",
+        options=["Phase 1 — Model Routing", "Phase 2 — Agent + Model Governance"],
+        horizontal=True,
+        key="pg_phase_radio",
+        help="Phase 1 governs where models run. Phase 2 adds Agent Gateway peers (model / MCP / A2A).",
+    )
+    phase = "phase2" if phase_label.startswith("Phase 2") else "phase1"
+    st.session_state.pg_phase = phase
+
     checks = [(n, probe(u, p)) for n, u, p in probe_defs]
     render_compact_health(checks, html=html)
 
@@ -608,6 +622,7 @@ def render_playground_tab(
             render_route_flow_html(
                 st.session_state.pg_request,
                 selected=st.session_state.pg_selected_node,
+                phase=st.session_state.get("pg_phase") or "phase1",
             )
         )
 

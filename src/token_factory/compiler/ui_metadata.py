@@ -113,7 +113,7 @@ def compile_ui_metadata(
             "gateway": "http://127.0.0.1:18080",
             "semantic_router_api": "http://127.0.0.1:8081",
             "semantic_router_dashboard": "http://localhost:8700",
-            "grafana": "http://127.0.0.1:3000",
+            "grafana": "http://127.0.0.1:3001",
             "prometheus": "http://127.0.0.1:9090",
         },
         "pinned_versions": PINNED_VERSIONS,
