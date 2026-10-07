@@ -1593,22 +1593,52 @@ with tab_route:
 with tab_arch:
     section(
         "Architecture",
-        "Control path",
-        'Single virtual model; Semantic Router sets <span class="tf-mono">x-ai-eg-model</span> for Envoy AI Gateway.',
+        "Phase 1 — Two-Tier vLLM-SR AI Gateway Blueprint",
+        "Logical Tier 1 (provider/model) and Tier 2 (inference placement) over one Envoy + "
+        "vLLM-SR path — not separate runtimes. Unwired capabilities show as "
+        "<em>not enabled</em>.",
     )
     html(
         """
-        <div class="tf-flow"><span class="hi">Client</span>
+        <div class="tf-flow"><span class="hi">Client / application</span>
    │  POST /v1/chat/completions  model=token-factory/auto
    ▼
-<span class="hi">Envoy AI Gateway</span>  <span class="dim">(AIGW v0.4.0)</span>
-   │  extproc → Semantic Router :50051
+<span class="hi">Ingress / AI Gateway</span>  <span class="dim">Envoy AI Gateway · extproc → SR :50051</span>
    ▼
-<span class="hi">vLLM Semantic Router</span>  <span class="dim">domain classify → LoRA / x-ai-eg-model</span>
-   ├─ coding / math     → openai/gpt-oss-120b  <span class="dim">Instinct MI300X</span>
-   └─ general           → openai/gpt-oss-20b   <span class="dim">Instinct MI300X</span>
+<span class="hi">Tier 1 — Provider Gateway</span>  <span class="dim">(logical · vLLM-SR + AMD policy)</span>
+   ├─ provider / model selection          <span class="hi">LIVE</span>
+   ├─ upstream / provider auth            <span class="dim">not enabled</span>
+   ├─ token / rate controls               <span class="dim">not enabled</span>
+   ├─ same-model endpoint failover        <span class="dim">configured when spare shares model</span>
+   └─ cross-model fallback                <span class="dim">not proven</span>
+   │  also: optional frontier / SaaS providers <span class="dim">(pluggable later)</span>
    ▼
-<span class="hi">AIGatewayRoute</span>  <span class="dim">match header → AIServiceBackend → AIM HTTP</span></div>
+<span class="hi">Tier 2 — Inference Gateway</span>  <span class="dim">(logical · route → endpoint map)</span>
+   ├─ endpoint / compute selection        <span class="hi">LIVE</span>
+   ├─ load-aware routing                  <span class="dim">not enabled</span>
+   ├─ KV-cache awareness                  <span class="dim">not enabled</span>
+   ├─ prefix-cache awareness              <span class="dim">not enabled</span>
+   └─ P/D disaggregation                  <span class="dim">not enabled</span>
+   ▼
+<span class="hi">Execution targets</span>
+   ├─ coding / math  → openai/gpt-oss-120b  <span class="dim">Instinct MI300X</span>
+   └─ general        → openai/gpt-oss-20b   <span class="dim">Instinct MI300X (+ same-model spare)</span></div>
+        """
+    )
+    section(
+        "Phase 2 — Agent Gateway + Semantic Routing",
+        "Broader agent graph",
+        "Model / MCP / A2A are <strong>peer</strong> targets of Agent Gateway. "
+        "vLLM-SR stays on the model branch only. Agent Gateway is mock/demo for Friday.",
+    )
+    html(
+        """
+        <div class="tf-flow"><span class="hi">Client / agent</span>
+   ▼
+<span class="hi">Agent Gateway</span>  <span class="dim">AuthN/Z · quotas · MCP/A2A policy · mock/demo</span>
+   ├── <span class="hi">MODEL</span> → Tier 1 / Tier 2 path above → MI300X / frontier
+   ├── <span class="hi">MCP</span>   → MCP servers   <span class="dim">peer · not under vLLM-SR</span>
+   └── <span class="hi">A2A</span>   → sub-agents    <span class="dim">peer · not under vLLM-SR</span></div>
         """
     )
 
